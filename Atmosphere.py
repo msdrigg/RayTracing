@@ -1,2 +1,0 @@
-class ChapmanLayers:
-    pass
