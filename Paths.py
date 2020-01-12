@@ -93,6 +93,8 @@ class QuasiParabolic(Path):
 
 class GreatCircleDeviationPC(Path):
     def __init__(self, radial_deviations, angular_deviations, **kwargs):
+        # TODO: Make sure this is all based off spherical initialization points
+        #  TODO: adjust it to have a cartesian back-end
         qp_init = kwargs.get('quasi_parabolic')
         if qp_init is not None:
             self.initial_point = qp_init(0)

@@ -12,7 +12,7 @@ class ChapmanLayers:
         self._parameters = new_params
         self.compile()
 
-    def electron_density(self, coordinate):
+    def electron_density(self, coordinate, use_spherical=False):
         # TODO: Implement this
         pass
 
