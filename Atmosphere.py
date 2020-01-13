@@ -16,6 +16,10 @@ class ChapmanLayers:
         # TODO: Implement this
         pass
 
+    def plasma_frequency(self, coordinate, use_spherical=False):
+        # TODO: Implement this
+        pass
+
     def compile(self):
         # TODO: Implement this
         pass

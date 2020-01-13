@@ -8,3 +8,7 @@ class BasicField:
         """
         # TODO: Implement this
         pass
+
+    def gyro_frequency(self, position, using_spherical=False):
+        # TODO: Implement this
+        pass
