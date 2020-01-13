@@ -1,10 +1,13 @@
-import numpy as np
+from numpy import dot, zeros, array, sqrt, nan, linspace, square
+from numpy import sum as vector_sum
+from numpy.linalg import norm
 from Atmosphere import ChapmanLayers
 from Field import BasicField
 from Paths import QuasiParabolic, GreatCircleDeviationPC
 from scipy.linalg import solve as sym_solve
 from scipy.integrate import simps
 from scipy.optimize import fsolve
+import Vector
 
 
 DEFAULT_PARAMS = 100, 10
@@ -64,8 +67,8 @@ class Tracer:
         self.calculated_paths.append(next_path)
 
     def calculate_derivatives(self, h=0.001):
-        gradient = np.zeros((self.parameter_number,))
-        matrix = np.zeros((self.parameter_number, self.parameter_number))
+        gradient = zeros((self.parameter_number,))
+        matrix = zeros((self.parameter_number, self.parameter_number))
         curr_path = self.calculated_paths[-1]
         # Calculate the diagonal elements and the gradient vector. These calculations involve the same function calls
         for param in range(self.parameter_number):
@@ -95,37 +98,33 @@ class Tracer:
 
     def integrate_parameter(self, path, h=0.01):
         step_number = int(1/h)
-        dp_array = np.zeros((step_number,))
-        t_0 = path(0, nu=1)
-        t_0 /= np.linalg.norm(t_0)
-        y_0 = self.field(path(0))
-        current_yp = np.dot(y_0, t_0)
+        dp_array = zeros((step_number,))
+        r = path(linspace(0, 1, step_number), nu=1)
+        r_dot = path(linspace(0, 1, step_number), nu=1)
+        t = Vector.unit_vector(r_dot)
+        y_vec = self.field.field_vec(r)*self.field.gyro_frequency(r)/self.frequency
+        x = square(self.atmosphere.plasma_frequency(r)/self.frequency)
+        y2 = square(norm(y_vec, axis=1))
+        yt = vector_sum(y_vec*t, axis=1)
+        current_yp = dot(y_vec[0], t[0])
         current_pt = 1
         for n in range(step_number):
-            r = path(n*h)
-            r_dot = path(n*h, nu=1)
-            t = r_dot/np.linalg.norm(r_dot)
-            y_vec = self.field.field_vec(r)*self.field.gyro_frequency(r)/self.frequency
-            y2 = np.linalg.norm(y_vec)**2
-            yt = np.dot(y_vec, t)
-            x = self.atmosphere.plasma_frequency(r)**2/self.frequency**2
-
             def equations(p):
                 yp, pt = p[0], p[1]
                 yp2 = yp**2
-
-                a = 1 - x - y2 + x*yp2
-                b = (x - 1)*(1 - x - y2) + x*y2/2 - x*yp2/2
+                a = 1 - x[n] - y2[n] + x[n]*yp2
+                b = (x[n] - 1)*(1 - x[n] - y2[n]) + x[n]*y2[n]/2 - x[n]*yp2/2
 
                 # TODO: What does 'plus for ordinary ray, minus for extraordinary ray' mean?
-                or_use = np.nan
-                mu2 = 1 - 2*x*(1 - x)/(2*(1 - x) - (y2 - yp2) + or_use - np.sqrt((y2 - yp2)**2 + 4*(1 - x)**2*yp2))
-                fraction = -x*yp*(mu2 - 1)/(a*mu2 + b)
-                f0 = pt*(pt - (yt - yt*pt)*fraction/2) - 1
-                f1 = pt*(yp - (y2 - yp2)*fraction/2) - yt
-                return np.array([f0, f1])
+                or_use = nan
+                mu2 = 1 - 2*x[n]*(1 - x[n])/(2*(1 - x[n]) - (y2[n] - yp2) + or_use
+                                             - sqrt((y2[n] - yp2)**2 + 4*(1 - x[n])**2*yp2))
+                fraction = -x[n]*yp*(mu2 - 1)/(a*mu2 + b)
+                f0 = pt*(pt - (yt[n] - yt[n]*pt)*fraction/2) - 1
+                f1 = pt*(yp - (y2[n] - yp2)*fraction/2) - yt[n]
+                return array([f0, f1])
 
-            solution, info, ier, msg = fsolve(equations, np.array([current_yp, current_pt]))
+            solution, info, ier, msg = fsolve(equations, array([current_yp, current_pt]))
             if ier != 1:
                 print(f"Error on fsolve: {msg}")
                 print(f"Function Call Number: {info['nfev']}")
@@ -134,7 +133,7 @@ class Tracer:
             current_yp = solution[0]
             current_pt = solution[1]
 
-            dp_array[n] = self.atmosphere.u2(r, current_yp)*current_pt*np.linalg.norm(r_dot)
+            dp_array[n] = self.atmosphere.u2(r, current_yp)*current_pt*norm(r_dot)
         # noinspection PyTypeChecker
         integration = simps(dp_array, dx=h)
         return integration
@@ -143,8 +142,8 @@ class Tracer:
 if __name__ == "__main__":
     atmosphere = ChapmanLayers()
     field = BasicField()
-    initial = np.array([0, 0, 0])
-    final = np.array([1, 1, 1])
+    initial = array([0, 0, 0])
+    final = array([1, 1, 1])
     path_generator = QuasiParabolic
     frequency = 30
 

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-import numpy as np
+from numpy.linalg import norm
+from numpy import cross, outer, zeros, linspace, concatenate
 import Vector
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation
@@ -24,11 +25,11 @@ class QuasiParabolic(Path):
         initial_rad, final_rad = initial_coordinates[0], final_coordinates[0]
         self.initial_point, self.final_point = Vector.cartesian(initial_coordinates), \
             Vector.cartesian(final_coordinates)
-        self.initial_point, self.final_point = self.initial_point/np.linalg.norm(self.initial_point), \
-            self.final_point/np.linalg.norm(self.final_point)
+        self.initial_point, self.final_point = self.initial_point/norm(self.initial_point), \
+            self.final_point/norm(self.final_point)
 
-        self.normal_vec = np.cross(self.initial_point, self.final_point)
-        self.normal_vec = self.normal_vec/np.linalg.norm(self.normal_vec)
+        self.normal_vec = cross(self.initial_point, self.final_point)
+        self.normal_vec = self.normal_vec/norm(self.normal_vec)
 
         # Parameters for quasiparabolic path only depend on atmospheric model and ignore magnetic field
         self._parameters = self.calculate_parameters(atmosphere_model)
@@ -43,9 +44,9 @@ class QuasiParabolic(Path):
         # Each point is evenly spaced along the great circle path connecting initial and final coordinates
         # Each point is a 2-vector holding its angular value in radians (along great circle path)
         # and its radial value at each point (in km)
-        self.points = np.zeros((point_number, 2))
-        self.points[:, 0] = np.linspace(0, angle_between, point_number)
-        self.points[:, 1] = np.linspace(initial_rad, final_rad, point_number)
+        self.points = zeros((point_number, 2))
+        self.points[:, 0] = linspace(0, angle_between, point_number)
+        self.points[:, 1] = linspace(initial_rad, final_rad, point_number)
 
         # Real representation of the line will be a poly fit of radius vs angle along great circle
         self._poly_fit = None
@@ -65,7 +66,7 @@ class QuasiParabolic(Path):
     def __call__(self, fraction, nu=0, use_spherical=False):
         # This isn't optimized but its ok
         alpha = fraction*self.points[-1]
-        rotations = Rotation.from_rotvec(np.outer(alpha, self.normal_vec))
+        rotations = Rotation.from_rotvec(outer(alpha, self.normal_vec))
         rotated_vecs = rotations.apply(self.initial_point)
         if use_spherical:
             output_vecs = Vector.spherical(rotated_vecs)
@@ -91,7 +92,7 @@ class QuasiParabolic(Path):
     @staticmethod
     def calculate_parameters(atmosphere_model):
         # TODO: Finish implementing this feature
-        return np.zeros((len(atmosphere_model),))
+        return zeros((len(atmosphere_model),))
 
 
 class GreatCircleDeviationPC(Path):
@@ -100,8 +101,8 @@ class GreatCircleDeviationPC(Path):
 
         # Each parameter is represented by a 2-vector: (position, value)
         # The extra 2 parameters are static parameters which correspond to fixing the start and end points
-        self._radial_positions = np.zeros((self.radial_param_number + 2, 2))
-        self._angular_deviations = np.zeros((self.angular_param_number + 2, 2))
+        self._radial_positions = zeros((self.radial_param_number + 2, 2))
+        self._angular_deviations = zeros((self.angular_param_number + 2, 2))
 
         # Set the position of all parameters by concatenating the lists of radial deviations and angular deviations
         # Position is the angular location along the great circle connecting initial and final points
@@ -135,11 +136,11 @@ class GreatCircleDeviationPC(Path):
             self._radial_positions[-1] = qp_initial(1)
 
         # Normalize initial and final points
-        self.initial_point, self.final_point = self.initial_point/np.linalg.norm(self.initial_point), \
-            self.final_point/np.linalg.norm(self.final_point)
+        self.initial_point, self.final_point = self.initial_point/norm(self.initial_point), \
+            self.final_point/norm(self.final_point)
 
-        self.normal_vec = np.cross(self.initial_point, self.final_point)
-        self.normal_vec = self.normal_vec/np.linalg.norm(self.normal_vec)
+        self.normal_vec = cross(self.initial_point, self.final_point)
+        self.normal_vec = self.normal_vec/norm(self.normal_vec)
 
         self._poly_fit_angular = None
         self._poly_fit_radial = None
@@ -147,7 +148,7 @@ class GreatCircleDeviationPC(Path):
 
     @property
     def parameters(self):
-        return np.concatenate((self._radial_positions[1:-1], self._angular_deviations[1:-1]))
+        return concatenate((self._radial_positions[1:-1], self._angular_deviations[1:-1]))
 
     @parameters.setter
     def parameters(self, parameter_tuple):
@@ -216,13 +217,13 @@ class GreatCircleDeviationPC(Path):
                                                 self._radial_positions[:, 1],
                                                 bc_type='natural', extrapolate=False)
         else:
-            cartesian_points = np.zeros((len(self.parameters) + 2, 3))
+            cartesian_points = zeros((len(self.parameters) + 2, 3))
             for index in range(len(self._radial_positions)):
                 alpha = self._radial_positions[index, 0]
                 r_1 = Rotation.from_rotvec(self.normal_vec * alpha)
                 v_1 = r_1.apply(self.initial_point)
-                rotation_vec_2 = np.cross(self.normal_vec, v_1)
-                rotation_vec_2 *= (self._poly_fit_angular(alpha)/np.linalg.norm(rotation_vec_2))
+                rotation_vec_2 = cross(self.normal_vec, v_1)
+                rotation_vec_2 *= (self._poly_fit_angular(alpha)/norm(rotation_vec_2))
                 r_2 = Rotation.from_rotvec(rotation_vec_2)
                 v_2 = r_2.apply(v_1)
                 v_2 *= self._radial_positions[index, 1]

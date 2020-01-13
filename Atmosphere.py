@@ -1,5 +1,7 @@
+from Vector import cartesian, spherical
+
+
 class ChapmanLayers:
-    # TODO: Implement this
     def __init__(self):
         self._parameters = None
 
@@ -13,13 +15,27 @@ class ChapmanLayers:
         self.compile()
 
     def electron_density(self, coordinate, use_spherical=False):
-        # TODO: Implement this
+        # TODO: Do I even need this?
+        #   I dont need unless its necessary to calculate gyro or plasma frequency
         pass
 
     def plasma_frequency(self, coordinate, use_spherical=False):
+        if use_spherical:
+            coordinate = cartesian(coordinate)
         # TODO: Implement this
-        pass
+        #   This must be vectorized i.e. coordinates may be a stack of vectors then plasma_frequency will return
+        #   a stack of values
+
+        # Must convert back to spherical for return
+        output = coordinate + self._parameters
+        if use_spherical:
+            output = spherical(output)
+        if len(output) == 1:
+            return output[0]
+        else:
+            return output
 
     def compile(self):
         # TODO: Implement this
+        #   This will initialize the backend including any poly_fits to return the atmospheric components
         pass

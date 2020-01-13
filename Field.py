@@ -7,8 +7,12 @@ class BasicField:
         :returns The normalized magnetic field in the same coordinate system as the position vector
         """
         # TODO: Implement this
+        #   This must be vectorized i.e. coordinates may be a stack of vectors then plasma_frequency will return
+        #   a stack of values
         pass
 
     def gyro_frequency(self, position, using_spherical=False):
         # TODO: Implement this
+        #         # This must be vectorized i.e. coordinates may be a stack of vectors then plasma_frequency will return
+        #         # a stack of values
         pass

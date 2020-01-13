@@ -1,12 +1,13 @@
-import numpy as np
+from numpy.linalg import norm
+from numpy import cos, arccos, sin, arctan2, vstack, clip, sum
 
 
 def cartesian(spherical_vector):
     """Returns the cartesian form of the spherical vector."""
     spherical_vector = spherical_vector.reshape(-1, 3)
-    output = np.vstack([(spherical_vector[:, 0]*np.sin(spherical_vector[:, 1])*np.cos(spherical_vector[:, 2])),
-                        spherical_vector[:, 0]*np.sin(spherical_vector[:, 1])*np.sin(spherical_vector[:, 2]),
-                        spherical_vector[:, 0]*np.cos(spherical_vector[:, 1])]).T
+    output = vstack([(spherical_vector[:, 0]*sin(spherical_vector[:, 1])*cos(spherical_vector[:, 2])),
+                    spherical_vector[:, 0]*sin(spherical_vector[:, 1])*sin(spherical_vector[:, 2]),
+                    spherical_vector[:, 0]*cos(spherical_vector[:, 1])]).T
     if len(output) == 1:
         return output[0]
     else:
@@ -16,9 +17,9 @@ def cartesian(spherical_vector):
 def spherical(cartesian_vector):
     """Returns the cartesian form of the spherical vector."""
     cartesian_vector = cartesian_vector.reshape(-1, 3)
-    r = np.linalg.norm(cartesian_vector, axis=1)
-    output = np.vstack([r, np.arccos(cartesian_vector[:, 2]/r),
-                        np.arctan2(cartesian_vector[:, 1], cartesian_vector[:, 0])]).T
+    r = norm(cartesian_vector, axis=1)
+    output = vstack([r, arccos(cartesian_vector[:, 2]/r),
+                     arctan2(cartesian_vector[:, 1], cartesian_vector[:, 0])]).T
     if len(output) == 1:
         return output[0]
     else:
@@ -27,7 +28,7 @@ def spherical(cartesian_vector):
 
 def unit_vector(vector):
     """ Returns the unit vector of the vector.  """
-    norms = np.linalg.norm(vector.reshape(-1, 3), axis=1)
+    norms = norm(vector.reshape(-1, 3), axis=1)
     output = vector / norms.reshape(-1, 1)
     if len(output) == 1:
         return output[0]
@@ -43,7 +44,7 @@ def angle_between(s1, s2, use_spherical=False):
     else:
         v1, v2 = s1, s2
     v1_u, v2_u = unit_vector(v1), unit_vector(v2)
-    output = np.arccos(np.clip(np.sum(v1_u.reshape((-1, 3))*v2_u.reshape((-1, 3)), axis=1), -1.0, 1.0))
+    output = arccos(clip(sum(v1_u.reshape((-1, 3))*v2_u.reshape((-1, 3)), axis=1), -1.0, 1.0))
     if len(output) == 1:
         return output[0]
     else:
