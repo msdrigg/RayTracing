@@ -14,11 +14,9 @@ All vectors will be stored and used in spherical coordinates in the ISO conventi
 
 * **Ionosphere Model**: Function that returns the electron density given a position in space in a corrdinate system
 
-* **Magnetic Field**: Function that returns the earth's magnetic field given a position in a coordinate system
+* **Magnetic Field**: Class that returns the earth's magnetic field when called with a position in space in a coordinate system
 
-* **Initial Path**: Function that returns the ion's path given the starting and ending points (maybe the atmosphere parameters too?)
-
-* **Other stuff**:??
+* **Initial Path**: Path Class representing the ion's path given the starting and ending points and the atmosphere parameters too
 
 ## Layers.py
 
@@ -34,4 +32,4 @@ All vectors will be stored and used in spherical coordinates in the ISO conventi
 
 ### Inputs
 
-* Should be a fixed function or a zero function
+* No inputs for this. The earth's magnetic field will be taken to be constant
