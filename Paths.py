@@ -1,9 +1,14 @@
 from abc import ABC, abstractmethod
 from numpy.linalg import norm
-from numpy import cross, outer, zeros, linspace, concatenate, array
+from numpy import cross, outer, zeros, \
+    linspace, concatenate, array, log, sqrt, square
 import Vector
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation
+from scipy.optimize import fsolve
+from Atmosphere import ChapmanLayers
+from Constants import pi, E_CHARGE, E_MASS, EARTH_RADIUS
+from math import acos, cos
 
 
 class Path(ABC):
@@ -81,9 +86,38 @@ class QuasiParabolic(Path):
             return output_vecs
 
     def compile_points(self):
+        beta_0 = 0  # TODO: Calculate beta_0
+        # Use fsolve
+        # Then add a funciton to plot this and test it.
+        a = 1 - beta_0
+        b = a  # calculate b
+        c = b  # calculate c
+        xb = self._parameters[3]**2 - EARTH_RADIUS**2 * cos(beta_0)**2
+        beta_b = acos(EARTH_RADIUS/self._parameters[3]*cos(beta_0))
 
-        # Poly_fit needs to fit
-        self._poly_fit = Exception()
+        apogee = -(b + sqrt(b**2 - 4*a*c))/(2*a)
+        total_angle = Vector.angle_between(self.initial_point, self.final_point)
+        initial_radius = norm(self.initial_point)
+        atmosphere_angle = (-beta_0 + beta_b)
+        radius_params = zeros([int(total_angle*6/pi) + 4, 2])
+        radius_params[::len(radius_params) - 1, 1] = initial_radius
+        radius_params[slice(1, len(radius_params) - 1, len(radius_params) - 3)] = \
+            [atmosphere_angle, self._parameters[3]]
+
+        increasing = linspace(self._parameters[3], apogee, len(radius_params) - 4)
+        radius_params[2:len(radius_params)/2, 1] = increasing
+        radius_params[len(radius_params)/2: -2, 1] = increasing[::-1]  # Flip it
+
+        def d_t(radius_vectorized):
+            x = a*square(radius_vectorized) + b*radius_vectorized + c
+            output = EARTH_RADIUS**2 * cos(beta_0)/sqrt(c) * \
+                log(radius_vectorized*(2*c + self._parameters[3]*b +
+                    2*sqrt(c*xb))/(self._parameters[3]*(2*c + radius_vectorized[:, 1]*b + 2*c*x)))
+            output += EARTH_RADIUS*(beta_b - beta_0)
+            return output
+
+        radius_params[2: -2, 1] = d_t(radius_params[2: -2, 0])
+        self._parameters = radius_params
 
     @property
     def poly_fit(self):
@@ -93,8 +127,13 @@ class QuasiParabolic(Path):
 
     @staticmethod
     def calculate_parameters(atmosphere_model):
-        # TODO: Finish implementing this feature
-        return zeros((len(atmosphere_model),))
+        if not isinstance(atmosphere_model, ChapmanLayers):
+            raise NotImplementedError("Only chapman layers currently implemented.")
+        e_max = atmosphere_model.parameters[0]**2*pi*E_MASS/E_CHARGE**2
+        rm = atmosphere_model.parameters[1]
+        ym = atmosphere_model.parameters[2]
+        rb = rm - ym
+        return array([e_max, rm, rb, ym])
 
 
 class GreatCircleDeviationPC(Path):
