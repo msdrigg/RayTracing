@@ -1,4 +1,4 @@
-from numpy import dot, zeros, array, sqrt, nan, linspace, square
+from numpy import dot, zeros, array, sqrt, linspace, square
 from numpy import sum as vector_sum
 from numpy.linalg import norm
 from Atmosphere import ChapmanLayers
@@ -8,6 +8,8 @@ from scipy.linalg import solve as sym_solve
 from scipy.integrate import simps
 from scipy.optimize import fsolve
 import Vector
+from matplotlib import pyplot as plt
+from Constants import pi
 
 
 DEFAULT_PARAMS = 100, 10
@@ -102,7 +104,8 @@ class Tracer:
         r = path(linspace(0, 1, step_number), nu=1)
         r_dot = path(linspace(0, 1, step_number), nu=1)
         t = Vector.unit_vector(r_dot)
-        y_vec = self.field.field_vec(r)*self.field.gyro_frequency(r)/self.frequency
+        y_vec = self.field.field_vec(r)*self.field.gyro_frequency(r)
+        y_vec /= self.frequency
         x = square(self.atmosphere.plasma_frequency(r)/self.frequency)
         y2 = square(norm(y_vec, axis=1))
         yt = vector_sum(y_vec*t, axis=1)
@@ -115,10 +118,9 @@ class Tracer:
                 a = 1 - x[n] - y2[n] + x[n]*yp2
                 b = (x[n] - 1)*(1 - x[n] - y2[n]) + x[n]*y2[n]/2 - x[n]*yp2/2
 
-                # TODO: What does 'plus for ordinary ray, minus for extraordinary ray' mean?
-                or_use = nan
-                mu2 = 1 - 2*x[n]*(1 - x[n])/(2*(1 - x[n]) - (y2[n] - yp2) + or_use
-                                             - sqrt((y2[n] - yp2)**2 + 4*(1 - x[n])**2*yp2))
+                # Choosing ordinary ray
+                mu2 = 1 - 2*x[n]*(1 - x[n])/(2*(1 - x[n]) - (y2[n] - yp2) +
+                                             sqrt((y2[n] - yp2)**2 + 4*(1 - x[n])**2*yp2))
                 fraction = -x[n]*yp*(mu2 - 1)/(a*mu2 + b)
                 f0 = pt*(pt - (yt[n] - yt[n]*pt)*fraction/2) - 1
                 f1 = pt*(yp - (y2[n] - yp2)*fraction/2) - yt[n]
@@ -138,9 +140,26 @@ class Tracer:
         integration = simps(dp_array, dx=h)
         return integration
 
+    def visualize(self, plot_all=False):
+        fig, ax = plt.subplot(1, 1)
+        atmosphere.visualize(self.initial_coordinates, self.final_coordinates, fig=fig, ax=ax, point_number=200)
+        ax.autoscale(False)
+        if plot_all:
+            for i in range(len(self.calculated_paths) - 1):
+                path = self.calculated_paths[i]
+                radii = path.radial_points[:, 1]
+                km_range = path.radial_points[:, 0]*path.total_angle*Vector.EARTH_RADIUS/1000
+                ax.plot(km_range, radii[:, 0], color='white')
+        # We always plot the last ones
+        path = self.calculated_paths[-1]
+        radii = path.radial_points[:, 1]
+        km_range = path.radial_points[:, 0]*path.total_angle*Vector.EARTH_RADIUS/1000
+        ax.plot(km_range, radii, color='black')
+        plt.show()
+
 
 if __name__ == "__main__":
-    atmosphere = ChapmanLayers()
+    atmosphere = ChapmanLayers(7, 350E3, 100E3, (.375*180/pi, 2), array([Vector.EARTH_RADIUS, pi/2, 0]))
     field = BasicField()
     initial = array([0, 0, 0])
     final = array([1, 1, 1])
@@ -151,4 +170,3 @@ if __name__ == "__main__":
     basic_tracer.initial_coordinates, basic_tracer.final_coordinates = initial, final
 
     paths = basic_tracer.trace()
-    print(paths)

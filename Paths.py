@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from numpy.linalg import norm
-from numpy import cross, outer, zeros, linspace, concatenate
+from numpy import cross, outer, zeros, linspace, concatenate, array
 import Vector
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation
@@ -18,13 +18,14 @@ class Path(ABC):
 
 
 class QuasiParabolic(Path):
+    # Currently, must initialize with a cartesian vector
     # This class needs less optimization because its just a starting point.
     def __init__(self, initial_coordinates, final_coordinates, atmosphere_model, point_number=None):
         # Initial and final points are normalized, but poly_fit(0) and poly_fit(1) will return the radial component
         # for the initial and final point
         initial_rad, final_rad = initial_coordinates[0], final_coordinates[0]
-        self.initial_point, self.final_point = Vector.cartesian(initial_coordinates), \
-            Vector.cartesian(final_coordinates)
+        self.initial_point, self.final_point = Vector.spherical_to_cartesian(initial_coordinates), \
+            Vector.spherical_to_cartesian(final_coordinates)
         self.initial_point, self.final_point = self.initial_point/norm(self.initial_point), \
             self.final_point/norm(self.final_point)
 
@@ -39,7 +40,7 @@ class QuasiParabolic(Path):
         if point_number is not None:
             self.point_number = point_number
         else:
-            self.point_number = int(angle_between*20)
+            self.point_number = int(angle_between*Vector.EARTH_RADIUS)
 
         # Each point is evenly spaced along the great circle path connecting initial and final coordinates
         # Each point is a 2-vector holding its angular value in radians (along great circle path)
@@ -63,13 +64,14 @@ class QuasiParabolic(Path):
         self._parameters = new_parameters
         self.compile_points()
 
-    def __call__(self, fraction, nu=0, use_spherical=False):
+    def __call__(self, fraction, use_spherical=False, **kwargs):
+        # Nu is not allowed as a parameter
         # This isn't optimized but its ok
         alpha = fraction*self.points[-1]
         rotations = Rotation.from_rotvec(outer(alpha, self.normal_vec))
         rotated_vecs = rotations.apply(self.initial_point)
         if use_spherical:
-            output_vecs = Vector.spherical(rotated_vecs)
+            output_vecs = Vector.cartesian_to_spherical(rotated_vecs)
             output_vecs[0] = self._poly_fit(alpha)
         else:
             output_vecs = rotated_vecs*self._poly_fit(alpha).reshape(-1, 1)
@@ -79,7 +81,7 @@ class QuasiParabolic(Path):
             return output_vecs
 
     def compile_points(self):
-        # TODO: Finish implementing this feature, just in spherical
+
         # Poly_fit needs to fit
         self._poly_fit = Exception()
 
@@ -106,6 +108,9 @@ class GreatCircleDeviationPC(Path):
 
         # Set the position of all parameters by concatenating the lists of radial deviations and angular deviations
         # Position is the angular location along the great circle connecting initial and final points
+        if isinstance(radial_deviations, int) or isinstance(angular_deviations, int):
+            radial_deviations = linspace(0, 1, radial_deviations)
+            angular_deviations = linspace(0, 1, angular_deviations)
         self._radial_positions[1:-1, 0] = radial_deviations
         self._angular_deviations[1:-1, 0] = angular_deviations
 
@@ -123,8 +128,8 @@ class GreatCircleDeviationPC(Path):
         elif 'initial_radial_parameters' in kwargs and 'initial_angular_parameters' in kwargs:
             self._radial_positions[1:-1, 1] = kwargs['initial_radial_parameters']
             self._angular_deviations[1:-1, 1] = kwargs['initial_angular_parameters']
-            self.initial_point, self.final_point = Vector.cartesian(kwargs['initial_coordinate']), \
-                Vector.cartesian(kwargs['final_coordinate'])
+            self.initial_point, self.final_point = Vector.spherical_to_cartesian(kwargs['initial_coordinate']), \
+                Vector.spherical_to_cartesian(kwargs['final_coordinate'])
 
         # Initialize with the QuasiParabolic path
         elif 'quasi_parabolic' in kwargs:
@@ -142,6 +147,8 @@ class GreatCircleDeviationPC(Path):
         self.normal_vec = cross(self.initial_point, self.final_point)
         self.normal_vec = self.normal_vec/norm(self.normal_vec)
 
+        self._total_angle = None
+
         self._poly_fit_angular = None
         self._poly_fit_radial = None
         self._poly_fit_cartesian = None
@@ -149,6 +156,10 @@ class GreatCircleDeviationPC(Path):
     @property
     def parameters(self):
         return concatenate((self._radial_positions[1:-1], self._angular_deviations[1:-1]))
+
+    @property
+    def radial_points(self):
+        return self._radial_positions
 
     @parameters.setter
     def parameters(self, parameter_tuple):
@@ -179,10 +190,10 @@ class GreatCircleDeviationPC(Path):
         if self._poly_fit_cartesian is None:
             self.interpolate_params()
 
-        point = np.array(list(map(lambda poly_fit: poly_fit(fraction, nu=nu), self._poly_fit_cartesian)))
+        point = array(list(map(lambda poly_fit: poly_fit(fraction, nu=nu), self._poly_fit_cartesian)))
 
         if use_spherical:
-            output_vecs = Vector.spherical(point)
+            output_vecs = Vector.cartesian_to_spherical(point)
         else:
             output_vecs = point
         if len(output_vecs) == 1:
@@ -207,6 +218,12 @@ class GreatCircleDeviationPC(Path):
         if self._poly_fit_cartesian is None:
             self.interpolate_params()
         return self._poly_fit_cartesian
+
+    @property
+    def total_angle(self):
+        if self._total_angle is None:
+            self._total_angle = Vector.angle_between(self.initial_point, self.final_point)
+        return self._total_angle
 
     def interpolate_params(self, radial=False):
         self._poly_fit_angular = CubicSpline(self._angular_deviations[:, 0],

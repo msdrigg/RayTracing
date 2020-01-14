@@ -24,12 +24,14 @@ All vectors will be stored and used in spherical coordinates in the ISO conventi
 
 ### Inputs
 
-* Whatever Chapman Layers need to Generate?
+* **f_0**: Maximum magnetic field
+* **hm**: Height of maximum magnetic field
+* **ym**: Field width parameter
 
 ## Field.py
 
   File that contains the code to calculate the earth's magnetic field given a point in space
 
-### Inputs
+## Constants.py
 
-* No inputs for this. The earth's magnetic field will be taken to be constant
+  File that contains known constants for geometry and physical constants
