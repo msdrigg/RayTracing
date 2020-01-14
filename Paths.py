@@ -7,8 +7,9 @@ from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation
 from scipy.optimize import fsolve
 from Atmosphere import ChapmanLayers
-from Constants import pi, E_CHARGE, E_MASS, EARTH_RADIUS
+from Constants import PI, E_CHARGE, E_MASS, EARTH_RADIUS, EPSILON_0
 from math import acos, cos, atan
+from matplotlib import pyplot as plt
 
 
 class Path(ABC):
@@ -29,19 +30,27 @@ class QuasiParabolic(Path):
                  atmosphere_model, wave_frequency, point_number=None):
         # Initial and final points are normalized, but poly_fit(0) and poly_fit(1) will return the radial component
         # for the initial and final point
-        initial_rad, final_rad = initial_coordinates[0], final_coordinates[0]
-        self.initial_point, self.final_point = Vector.spherical_to_cartesian(initial_coordinates), \
-            Vector.spherical_to_cartesian(final_coordinates)
+        initial_rad, final_rad = norm(initial_coordinates), norm(final_coordinates)
+        self.initial_point, self.final_point = initial_coordinates, final_coordinates
         self.initial_point, self.final_point = self.initial_point/norm(self.initial_point), \
             self.final_point/norm(self.final_point)
 
         self.normal_vec = cross(self.initial_point, self.final_point)
         self.normal_vec = self.normal_vec/norm(self.normal_vec)
 
-        # Parameters for quasiparabolic path only depend on atmospheric model and ignore magnetic field
-        self._parameters = self.calculate_parameters(atmosphere_model, wave_frequency)
-
         angle_between = Vector.angle_between(initial_coordinates, final_coordinates, use_spherical=False)
+
+        # Parameters for quasiparabolic path only depend on atmospheric model and ignore magnetic field
+        if atmosphere_model.gradient is None:
+            gradient_effect = 0
+        else:
+            midpoint = (self.initial_point + self.final_point) / 2
+            midpoint = Vector.unit_vector(midpoint) * (EARTH_RADIUS + atmosphere_model.parameters[1])
+            f_1 = atmosphere_model.plasma_frequency(midpoint)
+            f_0 = atmosphere_model.parameters[0]
+            gradient_effect = f_1 - f_0
+        self._parameters = self.calculate_parameters(atmosphere_model, gradient_effect, wave_frequency)
+
         # Point number is the number of points to calculate. All points in between are interpolated from PC spline
         if point_number is not None:
             self.point_number = point_number
@@ -51,9 +60,9 @@ class QuasiParabolic(Path):
         # Each point is evenly spaced along the great circle path connecting initial and final coordinates
         # Each point is a 2-vector holding its angular value in radians (along great circle path)
         # and its radial value at each point (in km)
-        self.points = zeros((point_number, 2))
-        self.points[:, 0] = linspace(0, angle_between, point_number)
-        self.points[:, 1] = linspace(initial_rad, final_rad, point_number)
+        self.points = zeros((self.point_number, 2))
+        self.points[:, 0] = linspace(0, angle_between, self.point_number)
+        self.points[:, 1] = linspace(initial_rad, final_rad, self.point_number)
 
         # Real representation of the line will be a poly fit of radius vs angle along great circle
         self._poly_fit = None
@@ -73,7 +82,10 @@ class QuasiParabolic(Path):
     def __call__(self, fraction, use_spherical=False, **kwargs):
         # Nu is not allowed as a parameter
         # This isn't optimized but its ok
-        alpha = fraction*self.points[-1]
+
+        if self._poly_fit is None:
+            self.compile_points()
+        alpha = fraction*self.points[-1, 0]
         rotations = Rotation.from_rotvec(outer(alpha, self.normal_vec))
         rotated_vecs = rotations.apply(self.initial_point)
         if use_spherical:
@@ -88,11 +100,12 @@ class QuasiParabolic(Path):
 
     def compile_points(self):
         e_max, rm, rb, ym, f = self._parameters
+        rm = rm + EARTH_RADIUS
+        rb = rb + EARTH_RADIUS
         fc = sqrt(80.62*e_max)
         a = 1 - (fc/f)**2 + (fc*rb/(f*ym))**2
         b = -2 * rm * (fc * rb / (f * ym)) ** 2
         total_angle = Vector.angle_between(self.initial_point, self.final_point)
-        initial_radius = norm(self.initial_point)
 
         def beta_solver(beta_0_g):
             beta_0_g = beta_0_g[0]
@@ -100,45 +113,64 @@ class QuasiParabolic(Path):
             xb_g = rb**2 - (EARTH_RADIUS**2) * (cos(beta_0_g))**2
             c_g = (fc * rb * rm / (f * ym)) ** 2 - \
                   (EARTH_RADIUS ** 2) * (cos(beta_0_g)) ** 2
-            return -total_angle/2*EARTH_RADIUS + EARTH_RADIUS*(beta_b_g - beta_0_g) + \
-                (EARTH_RADIUS**2) * (cos(beta_0_g)) / sqrt(c_g) * \
-                log((2*c_g + b*rb + 2*sqrt(c_g*xb_g) / (rb*sqrt(b**2 - 4*a*c_g))))
+            adder = -total_angle/2 * EARTH_RADIUS + EARTH_RADIUS * (beta_b_g - beta_0_g)
+            multiplier = (EARTH_RADIUS**2) * (cos(beta_0_g)) / sqrt(c_g)
+            numerator = 2*c_g + b*rb + 2*sqrt(c_g*xb_g)
+            denominator = rb*sqrt(b**2 - 4*a*c_g)
+            output = adder + multiplier * log(numerator/denominator)
+            return array([output])
 
         # Guessing beta_0 assuming that the ray travels a straight line and meets between the
         # final and initial point at the point of greatest atmospheric e-density
-        d_perp = norm(self.final_point - self.initial_point)
-        alpha_0 = atan(rm/(d_perp/2))
+        d_perp = norm(self.final_point*self.points[0, 1] - self.initial_point*self.points[-1, 1])
+        alpha_0 = atan((rm - EARTH_RADIUS)/(d_perp/2))
         beta_0_initial_guess = alpha_0 - total_angle/2
+        while b**2 < 4*a*((fc * rb * rm / (f * ym)) ** 2 -
+                          (EARTH_RADIUS ** 2) * (cos(beta_0_initial_guess)) ** 2):
+            print(f"Reducing initial beta guess. New guess: {beta_0_initial_guess}")
+            if beta_0_initial_guess < .02:
+                raise OverflowError(f"Too many runs {beta_0_initial_guess}")
+            beta_0_initial_guess *= 2.0/3.0
         guess = array([beta_0_initial_guess])
-        beta_0, info_dict, ier, msg = fsolve(beta_solver, guess)
+        beta_0, info_dict, ier, msg = fsolve(beta_solver, guess, full_output=True)
+        if ier != 1:
+            print(f"Error on fsolve: {msg}")
+            print(f"Function Call Number: {info_dict['nfev']}")
+            print(f"Last solution before failure: {beta_0}")
+        print(f"Final Beta_0 Solution: {beta_0}")
 
         c = (fc*rb*rm/(f*ym))**2 - (EARTH_RADIUS**2)*(cos(beta_0))**2
         xb = rb**2 - (EARTH_RADIUS**2) * (cos(beta_0))**2
         beta_b = acos(EARTH_RADIUS/rb*cos(beta_0))
         apogee = -(b + sqrt(b**2 - 4*a*c))/(2*a)
 
-        atmosphere_angle = (-beta_0 + beta_b)
+        # We want 2 params for the straight part and 2 additional parameter per degree of longitude
+        radius_params = zeros([int(total_angle * 180 / PI) * 2 + 3, 2])
+        radius_params[::len(radius_params) - 1, 1] = self.points[0, 1], self.points[-1, 1]
+        radius_params[-1, 0] = total_angle
 
-        # We want 4 params for the straight part and 1 additional parameter per degree of longitude
-        radius_params = zeros([int(total_angle*180/pi*2) + 4, 2])
-        radius_params[::len(radius_params) - 1, 1] = initial_radius
-        radius_params[slice(1, len(radius_params) - 1, len(radius_params) - 3)] = \
-            [atmosphere_angle, self._parameters[3]]
-
-        increasing = linspace(self._parameters[3], apogee, len(radius_params) - 4)
-        radius_params[2:len(radius_params)/2, 1] = increasing
-        radius_params[len(radius_params)/2: -2, 1] = increasing[::-1]  # Flip it
+        increasing = linspace(rb, apogee, int((len(radius_params) - 1)/2))
+        radius_params[1:int(len(radius_params)/2) + 1, 1] = increasing
+        radius_params[int(len(radius_params)/2): -1, 1] = increasing[::-1]  # Flip it
 
         def d_t(radius_vectorized):
             x = a*square(radius_vectorized) + b*radius_vectorized + c
-            output = EARTH_RADIUS**2 * cos(beta_0)/sqrt(c) * \
-                log(radius_vectorized*(2*c + self._parameters[3]*b +
-                    2*sqrt(c*xb))/(self._parameters[3]*(2*c + radius_vectorized[:, 1]*b + 2*c*x)))
-            output += EARTH_RADIUS*(beta_b - beta_0)
+            multiplier = EARTH_RADIUS**2 * cos(beta_0)/sqrt(c)
+            numerator = radius_vectorized*(2*c + rb*b + 2*sqrt(c*xb))
+            denominator = rb*(2*c + radius_vectorized*b + 2*sqrt(c*x))
+            adder = EARTH_RADIUS*(beta_b - beta_0)
+            output = adder + multiplier*log(numerator/denominator)
             return output
 
-        radius_params[2: -2, 1] = d_t(radius_params[2: -2, 0])
-        self._parameters = radius_params
+        radius_params[1:int(len(radius_params)/2) + 1, 0] = \
+            d_t(radius_params[1: int(len(radius_params)/2) + 1, 1]) / EARTH_RADIUS
+        radius_params[int(len(radius_params) / 2) + 1: -1, 0] = \
+            total_angle - d_t(radius_params[int(len(radius_params) / 2) + 1: -1, 1]) / EARTH_RADIUS
+
+        self.points = radius_params
+        self._poly_fit = CubicSpline(radius_params[:, 0],
+                                     radius_params[:, 1],
+                                     bc_type='natural', extrapolate=False)
 
     @property
     def poly_fit(self):
@@ -147,10 +179,11 @@ class QuasiParabolic(Path):
         return self._poly_fit
 
     @staticmethod
-    def calculate_parameters(atmosphere_model, wave_frequency):
+    def calculate_parameters(atmosphere_model, gradient_effect, wave_frequency):
         if not isinstance(atmosphere_model, ChapmanLayers):
             raise NotImplementedError("Only chapman layers currently implemented.")
-        e_max = atmosphere_model.parameters[0]**2*pi*E_MASS/E_CHARGE**2
+        e_max = (((atmosphere_model.parameters[0] + gradient_effect) * 2 * PI) ** 2) * \
+            E_MASS * EPSILON_0 / E_CHARGE ** 2
         rm = atmosphere_model.parameters[1]
         ym = atmosphere_model.parameters[2]
         rb = rm - ym
@@ -159,18 +192,18 @@ class QuasiParabolic(Path):
 
 class GreatCircleDeviationPC(Path):
     def __init__(self, radial_deviations, angular_deviations, **kwargs):
+        # Set the position of all parameters by concatenating the lists of radial deviations and angular deviations
+        # Position is the angular location along the great circle connecting initial and final points
+        if isinstance(radial_deviations, int) or isinstance(angular_deviations, int):
+            radial_deviations = linspace(0, 1, radial_deviations)
+            angular_deviations = linspace(0, 1, angular_deviations)
+
         self.radial_param_number, self.angular_param_number = len(radial_deviations), len(angular_deviations)
 
         # Each parameter is represented by a 2-vector: (position, value)
         # The extra 2 parameters are static parameters which correspond to fixing the start and end points
         self._radial_positions = zeros((self.radial_param_number + 2, 2))
         self._angular_deviations = zeros((self.angular_param_number + 2, 2))
-
-        # Set the position of all parameters by concatenating the lists of radial deviations and angular deviations
-        # Position is the angular location along the great circle connecting initial and final points
-        if isinstance(radial_deviations, int) or isinstance(angular_deviations, int):
-            radial_deviations = linspace(0, 1, radial_deviations)
-            angular_deviations = linspace(0, 1, angular_deviations)
         self._radial_positions[1:-1, 0] = radial_deviations
         self._angular_deviations[1:-1, 0] = angular_deviations
 
@@ -196,9 +229,10 @@ class GreatCircleDeviationPC(Path):
             qp_initial = kwargs['quasi_parabolic']
             self.initial_point = qp_initial(0)
             self.final_point = qp_initial(1)
-            self._radial_positions[1:-1, 1] = qp_initial(radial_deviations)
-            self._radial_positions[0] = qp_initial(0)
-            self._radial_positions[-1] = qp_initial(1)
+            print(qp_initial.poly_fit(radial_deviations))
+            self._radial_positions[1:-1, 1] = norm(qp_initial.poly_fit(radial_deviations), axis=1)
+            self._radial_positions[0] = norm(qp_initial(0))
+            self._radial_positions[-1] = norm(qp_initial(1))
 
         # Normalize initial and final points
         self.initial_point, self.final_point = self.initial_point/norm(self.initial_point), \
@@ -247,9 +281,6 @@ class GreatCircleDeviationPC(Path):
             self.interpolate_params()
 
     def __call__(self, fraction, nu=0, use_spherical=False):
-        if self._poly_fit_cartesian is None:
-            self.interpolate_params()
-
         point = array(list(map(lambda poly_fit: poly_fit(fraction, nu=nu), self._poly_fit_cartesian)))
 
         if use_spherical:

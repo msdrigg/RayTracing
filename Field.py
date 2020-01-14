@@ -1,5 +1,5 @@
 from Vector import cartesian_to_spherical, unit_radius, unit_theta, unit_vector, spherical_to_cartesian
-from Constants import B_FIELD, EARTH_RADIUS, E_CHARGE, E_MASS, C, pi
+from Constants import B_FIELD, EARTH_RADIUS, E_CHARGE, E_MASS, C, PI
 from numpy import power, cos, sin, sqrt, square
 
 
@@ -7,7 +7,7 @@ class BasicField:
     def __init__(self):
         self.b_max = B_FIELD
         self.re3 = power(EARTH_RADIUS, 3)  # E_Radius^3
-        self.b_factor = E_CHARGE/(2*pi*E_MASS*C)  # Used to calculate gyro frequency
+        self.b_factor = E_CHARGE/(2 * PI * E_MASS * C)  # Used to calculate gyro frequency
 
     def field_vec(self, position, using_spherical=False):
         """

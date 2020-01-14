@@ -1,6 +1,6 @@
 from numpy.linalg import norm
 from numpy import cos, arccos, sin, arctan2, vstack, clip, sum
-from Constants import pi, EARTH_RADIUS
+from Constants import PI, EARTH_RADIUS
 
 
 def spherical_to_cartesian(spherical_vector):
@@ -79,8 +79,7 @@ def unit_theta(position):
 def latitude_to_spherical(vector):
     vector = vector.reshape(-1, 3)
     vector[:, 1] = 90 - vector[:, 1]
-    vector[:, 0] = EARTH_RADIUS + vector[:, 0]
-    vector[:, 1:] *= pi/180.0
+    vector[:, 1:] *= PI / 180.0
 
     if len(vector) == 1:
         return vector[0]

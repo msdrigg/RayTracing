@@ -1,5 +1,5 @@
 from Vector import spherical_to_cartesian, cartesian_to_spherical, angle_between, unit_vector
-from Constants import EARTH_RADIUS, pi
+from Constants import EARTH_RADIUS, PI
 from numpy import array, exp, linspace, zeros, cross, sign, repeat
 from matplotlib import pyplot as plt
 from scipy.spatial.transform import Rotation
@@ -11,7 +11,7 @@ class ChapmanLayers:
 
         # Array-like parameter whose first element is the magnitude of the gradient in a unit of
         #   MHz per degree and whose second element is the parameter for the direction
-        #   +1 for north, -1 for south, +2 for east, -2 for west
+        #   -1 for north, +1 for south, +2 for east, -2 for west
         self.gradient = gradient
 
         # Spherical start point
@@ -40,8 +40,7 @@ class ChapmanLayers:
         multiplier = self._parameters[0]
         if self.gradient is not None:
             multiplier = multiplier + self.gradient[0] * sign(self.gradient[1]) * \
-                      (coordinate[:, abs(self.gradient[1])] - self.start_point[self.gradient[1]])
-
+                      (coordinate[:, abs(self.gradient[1])] - cartesian_to_spherical(self.start_point)[abs(self.gradient[1])])
         output = multiplier*exp(1 - z1 - exp(-z1))
 
         if len(output) == 1:
@@ -79,6 +78,6 @@ class ChapmanLayers:
 
 
 if __name__ == "__main__":
-    model = ChapmanLayers(7, 350E3, 100E3, (.375*180/pi, 2), array([EARTH_RADIUS, pi/2, 0]))
-    model.visualize(array([EARTH_RADIUS, pi/2, 0]), array((EARTH_RADIUS, pi/2, 10*pi/180)), show=True, using_spherical=True,
+    model = ChapmanLayers(7, 350E3, 100E3, (.375 * 180 / PI, 2), array([EARTH_RADIUS, PI / 2, 0]))
+    model.visualize(array([EARTH_RADIUS, PI / 2, 0]), array((EARTH_RADIUS, PI / 2, 10 * PI / 180)), show=True, using_spherical=True,
                     point_number=200)

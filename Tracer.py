@@ -9,7 +9,7 @@ from scipy.integrate import simps
 from scipy.optimize import fsolve
 import Vector
 from matplotlib import pyplot as plt
-from Constants import pi
+from Constants import PI, EARTH_RADIUS
 
 
 DEFAULT_PARAMS = 100, 10
@@ -42,7 +42,7 @@ class Tracer:
                              "setting the calculated path to None")
 
         self.initial_path = self.path_generator(self.initial_coordinates, self.final_coordinates,
-                                                self.atmosphere, self.field)
+                                                self.atmosphere, self.frequency)
         self.calculated_paths = GreatCircleDeviationPC(*self.parameters, quasi_parabolic=self.initial_path)
 
     def trace(self, steps=5, parameters=None):
@@ -126,7 +126,7 @@ class Tracer:
                 f1 = pt*(yp - (y2[n] - yp2)*fraction/2) - yt[n]
                 return array([f0, f1])
 
-            solution, info, ier, msg = fsolve(equations, array([current_yp, current_pt]))
+            solution, info, ier, msg = fsolve(equations, array([current_yp, current_pt]), full_output=True)
             if ier != 1:
                 print(f"Error on fsolve: {msg}")
                 print(f"Function Call Number: {info['nfev']}")
@@ -140,33 +140,40 @@ class Tracer:
         integration = simps(dp_array, dx=h)
         return integration
 
-    def visualize(self, plot_all=False, plot_qp=False):
-        fig, ax = plt.subplot(1, 1)
+    def visualize(self, plot_all=False):
+        fig, ax = plt.subplots(figsize=(6, 6))
         atmosphere.visualize(self.initial_coordinates, self.final_coordinates, fig=fig, ax=ax, point_number=200)
         ax.autoscale(False)
         if plot_all:
             for i in range(len(self.calculated_paths) - 1):
                 path = self.calculated_paths[i]
                 radii = path.radial_points[:, 1]
-                km_range = path.radial_points[:, 0]*path.total_angle*Vector.EARTH_RADIUS/1000
+                km_range = path.radial_points[:, 0]*path.total_angle*EARTH_RADIUS/1000
                 ax.plot(km_range, radii[:, 0], color='white')
         # We always plot the last ones
         path = self.calculated_paths[-1]
         radii = path.radial_points[:, 1]
-        km_range = path.radial_points[:, 0]*path.total_angle*Vector.EARTH_RADIUS/1000
+        km_range = path.radial_points[:, 0]*path.total_angle*EARTH_RADIUS/1000
         ax.plot(km_range, radii, color='black')
         plt.show()
 
 
 if __name__ == "__main__":
-    atmosphere = ChapmanLayers(7, 350E3, 100E3, (.375*180/pi, 2), array([Vector.EARTH_RADIUS, pi/2, 0]))
     field = BasicField()
-    initial = array([0, 0, 0])
-    final = array([1, 1, 1])
+    initial = Vector.spherical_to_cartesian(
+        Vector.latitude_to_spherical(
+            array([EARTH_RADIUS, 90 + 23.5, 133.7])))
+    final = Vector.spherical_to_cartesian(
+        Vector.latitude_to_spherical(
+            array([EARTH_RADIUS, 90 + 23.5 - 10, 133.7])))
+    atmosphere = ChapmanLayers(7E6, 350E3, 100E3, (0.375E6 * 180 / PI, -1), initial)
     path_generator = QuasiParabolic
-    frequency = 30
+    frequency = 10E6  # Hz
 
     basic_tracer = Tracer(frequency, atmosphere, field, path_generator)
     basic_tracer.initial_coordinates, basic_tracer.final_coordinates = initial, final
 
-    paths = basic_tracer.trace()
+    basic_tracer.compile_initial_path()
+    basic_tracer.visualize()
+
+    # paths = basic_tracer.trace()
