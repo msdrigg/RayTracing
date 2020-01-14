@@ -140,7 +140,7 @@ class Tracer:
         integration = simps(dp_array, dx=h)
         return integration
 
-    def visualize(self, plot_all=False):
+    def visualize(self, plot_all=False, plot_qp=False):
         fig, ax = plt.subplot(1, 1)
         atmosphere.visualize(self.initial_coordinates, self.final_coordinates, fig=fig, ax=ax, point_number=200)
         ax.autoscale(False)
