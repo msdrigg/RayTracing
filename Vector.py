@@ -1,6 +1,6 @@
 from numpy.linalg import norm
 from numpy import cos, arccos, sin, arctan2, vstack, clip, sum
-from Constants import PI, EARTH_RADIUS
+from Constants import PI
 
 
 def spherical_to_cartesian(spherical_vector):
@@ -67,13 +67,13 @@ def unit_radius(position):
 def unit_theta(position):
     position = cartesian_to_spherical(position).reshape(-1, 3)
     cos_phi = cos(position[:, 2])
-    unit_thetas = vstack([cos(position[:, 1])*cos_phi,
-                         sin(position[:, 1])*cos_phi,
-                         -sin(position[:, 2])]).T
-    if len(unit_thetas) == 1:
-        return unit_thetas[0]
+    unit_thetas_return = vstack([cos(position[:, 1])*cos_phi,
+                                sin(position[:, 1])*cos_phi,
+                                -sin(position[:, 2])]).T
+    if len(unit_thetas_return) == 1:
+        return unit_thetas_return[0]
     else:
-        return unit_thetas
+        return unit_thetas_return
 
 
 def latitude_to_spherical(vector):

@@ -1,5 +1,5 @@
 from Vector import spherical_to_cartesian, cartesian_to_spherical, angle_between, unit_vector
-from Constants import EARTH_RADIUS, PI
+from Constants import EARTH_RADIUS
 from numpy import array, exp, linspace, zeros, cross, sign, repeat
 from matplotlib import pyplot as plt
 from scipy.spatial.transform import Rotation
@@ -40,7 +40,8 @@ class ChapmanLayers:
         multiplier = self._parameters[0]
         if self.gradient is not None:
             multiplier = multiplier + self.gradient[0] * sign(self.gradient[1]) * \
-                      (coordinate[:, abs(self.gradient[1])] - cartesian_to_spherical(self.start_point)[abs(self.gradient[1])])
+                      (coordinate[:, abs(self.gradient[1])] -
+                       cartesian_to_spherical(self.start_point)[abs(self.gradient[1])])
         output = multiplier*exp(1 - z1 - exp(-z1))
 
         if len(output) == 1:
@@ -65,19 +66,14 @@ class ChapmanLayers:
         for i in range(point_number):
             plotted_vecs = repeat(v_1[i].reshape(-1, 1), point_number, axis=1).T
             plotted_vecs[:, 0] = radii
-            frequency_grid[:, i] = self.plasma_frequency(plotted_vecs, using_spherical=True)
+            frequency_grid[:, i] = self.plasma_frequency(plotted_vecs, using_spherical=True)/1E6
         image = ax.imshow(frequency_grid, cmap='gist_rainbow', interpolation='bilinear', origin='lower',
                           alpha=1, aspect='auto', extent=[0, total_angle*EARTH_RADIUS/1000, 0, 400])
-        fig.colorbar(image, ax=ax)
+        color_bar = fig.colorbar(image, ax=ax)
+        color_bar.set_label("Plasma Frequency (MHz)")
 
         if show:
             ax.set_title("Chapman Layers Atmosphere")
             plt.show()
         else:
             return fig, ax
-
-
-if __name__ == "__main__":
-    model = ChapmanLayers(7, 350E3, 100E3, (.375 * 180 / PI, 2), array([EARTH_RADIUS, PI / 2, 0]))
-    model.visualize(array([EARTH_RADIUS, PI / 2, 0]), array((EARTH_RADIUS, PI / 2, 10 * PI / 180)), show=True, using_spherical=True,
-                    point_number=200)
