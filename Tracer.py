@@ -195,7 +195,7 @@ class Tracer:
     def trace(self, steps=5, parameters=None):
         if parameters is not None:
             self.parameters = parameters
-        else:
+        elif self.parameters is None:
             self.parameters = DEFAULT_PARAMS
             self.parameter_number = DEFAULT_PARAMS[0] + DEFAULT_PARAMS[1]
 
@@ -211,14 +211,16 @@ class Tracer:
 
     def newton_raphson_step(self, h=1000):
         matrix, gradient = self.calculate_derivatives(h=h)
+        eof_string = '_'.join(map(str, self.parameters))
+        eof_string += f'_{self.frequency}'
         try:
-            savetxt(join_path("SavedData", "Matrix.txt"), matrix)
-            savetxt(join_path("SavedData", "Gradient.txt"), gradient)
-            savetxt(join_path("SavedData", "CurrentParams.txt"), self.calculated_paths[-1].parameters[:, 1])
+            savetxt(join_path("SavedData", f"Matrix{eof_string}.txt"), matrix)
+            savetxt(join_path("SavedData", f"Gradient{eof_string}.txt"), gradient)
+            savetxt(join_path("SavedData", f"CurrentParams{eof_string}.txt"), self.calculated_paths[-1].parameters[:, 1])
         except FileNotFoundError:
-            savetxt("Matrix.txt", matrix)
-            savetxt("Gradient.txt", gradient)
-            savetxt("CurrentParams.txt", self.calculated_paths[-1].parameters[:, 1])
+            savetxt(f"Matrix{eof_string}.txt", matrix)
+            savetxt(f"Gradient{eof_string}.txt", gradient)
+            savetxt(f"CurrentParams{eof_string}.txt", self.calculated_paths[-1].parameters[:, 1])
         # Calculate diagonal matrix elements
 
         b = matrix@self.calculated_paths[-1].parameters[:, 1] - gradient
@@ -396,6 +398,8 @@ if __name__ == "__main__":
     frequency = 10E6  # Hz
 
     basic_tracer = Tracer(frequency, atmosphere, field, path_generator)
+    basic_tracer.parameters = (50, 0)
+    basic_tracer.parameter_number = 50
     basic_tracer.initial_coordinates, basic_tracer.final_coordinates = initial, final
 
     basic_tracer.compile_initial_path()
