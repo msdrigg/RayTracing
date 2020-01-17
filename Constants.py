@@ -3,5 +3,5 @@ B_FIELD = 3.12E-5  # T
 E_CHARGE = 1.6022E-19  # Coulombs
 E_MASS = 9.10938356E-31  # kg
 C = 2.998E8  # m / s
-PI = 3.141592653589793  # unit-less
+PI = 3.141592653589793  # unit-lepss
 EPSILON_0 = 8.854187817E-12  # F / m

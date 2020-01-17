@@ -1,0 +1,25 @@
+import Vector
+from Constants import *
+from numpy import array
+from Paths import QuasiParabolic
+from Atmosphere import ChapmanLayers
+from Field import BasicField
+from Tracer import Tracer
+field = BasicField()
+initial = Vector.spherical_to_cartesian(
+    Vector.latitude_to_spherical(
+        array([EARTH_RADIUS, 90 + 23.5, 133.7])))
+final = Vector.spherical_to_cartesian(
+    Vector.latitude_to_spherical(
+        array([EARTH_RADIUS, 90 + 23.5 - 10, 133.7])))
+atmosphere = ChapmanLayers(7E6, 350E3, 100E3, (0.375E6 * 180 / PI, -1), initial)
+path_generator = QuasiParabolic
+frequency = 10E6  # Hz
+
+basic_tracer = Tracer(frequency, atmosphere, field, path_generator)
+basic_tracer.initial_coordinates, basic_tracer.final_coordinates = initial, final
+
+basic_tracer.compile_initial_path()
+# basic_tracer.visualize(plot_all=True)
+
+paths = basic_tracer.trace()

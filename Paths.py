@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from numpy.linalg import norm
-from numpy import cross, outer, zeros, \
-    linspace, concatenate, array, log, sqrt, square
+from numpy import cross, outer, zeros, repeat, \
+    linspace, concatenate, array, log, sqrt, square, asarray
 import Vector
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation
@@ -167,7 +167,7 @@ class QuasiParabolic(Path):
 
         self.points = radius_params
         self._poly_fit = CubicSpline(radius_params[:, 0], radius_params[:, 1],
-                                     bc_type='natural', extrapolate=False)
+                                     bc_type='natural', extrapolate=True)
 
     @property
     def poly_fit(self):
@@ -284,7 +284,13 @@ class GreatCircleDeviationPC(Path):
 
     def adjust_parameters(self, indexes, adjustments, mutate=False):
         adjusted_params = self.parameters
-        adjusted_params[indexes, 1] = adjusted_params[indexes, 1] + adjustments
+        indexes = asarray(indexes).flatten()
+        copied_adjustments = asarray(adjustments).flatten()
+        if len(indexes) != len(copied_adjustments):
+            copied_adjustments = repeat(copied_adjustments, len(indexes))
+        copied_adjustments[indexes >= self.radial_param_number - 2] = \
+            copied_adjustments[indexes >= self.radial_param_number - 2]/EARTH_RADIUS
+        adjusted_params[indexes, 1] = adjusted_params[indexes, 1] + copied_adjustments
         if self._poly_fit_cartesian is None:
             self.interpolate_params()
         if not mutate:
@@ -293,7 +299,8 @@ class GreatCircleDeviationPC(Path):
                 len(self._angular_deviations) - 2,
                 initial_parameters=adjusted_params[:, 1],
                 initial_coordinate=self(0),
-                final_coordinate=self(1)
+                final_coordinate=self(1),
+                using_spherical=False
                 )
             new_path.interpolate_params()
             return new_path
@@ -342,22 +349,23 @@ class GreatCircleDeviationPC(Path):
     def interpolate_params(self, radial=False):
         self._poly_fit_angular = CubicSpline(self._angular_deviations[:, 0],
                                              self._angular_deviations[:, 1],
-                                             bc_type='natural', extrapolate=False)
+                                             bc_type='natural', extrapolate=True)
         if radial:
             self._poly_fit_radial = CubicSpline(self._radial_positions[:, 0],
                                                 self._radial_positions[:, 1],
-                                                bc_type='natural', extrapolate=False)
+                                                bc_type='natural', extrapolate=True)
         else:
             cartesian_points = zeros((len(self._radial_positions), 3))
             for index in range(len(self._radial_positions)):
                 alpha = self._radial_positions[index, 0]
                 r_1 = Rotation.from_rotvec(self.normal_vec * alpha)
                 v_1 = r_1.apply(self.initial_point)
-                rotation_vec_2 = cross(self.normal_vec, v_1)
-                rotation_vec_2 *= (self._poly_fit_angular(alpha)/norm(rotation_vec_2))
+                rotation_vec_2 = Vector.unit_vector(cross(self.normal_vec, v_1))
+                rotation_vec_2 *= self._poly_fit_angular(alpha)
                 r_2 = Rotation.from_rotvec(rotation_vec_2)
                 v_2 = r_2.apply(v_1)
                 v_2 *= self._radial_positions[index, 1]
+                # print(f"Rad pos: {self._radial_positions[:, 1] - EARTH_RADIUS}")
                 cartesian_points[index] = v_2
 
             if self._poly_fit_cartesian is None:
