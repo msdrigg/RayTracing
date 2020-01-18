@@ -192,7 +192,7 @@ class Tracer:
         else:
             self.calculated_paths.append(new_path)
 
-    def trace(self, steps=5, parameters=None):
+    def trace(self, steps=50, parameters=None, visualize=True):
         if parameters is not None:
             self.parameters = parameters
         elif self.parameters is None:
@@ -201,18 +201,32 @@ class Tracer:
 
         if self.calculated_paths is None:
             self.compile_initial_path()
-
+        self.visualize(plot_all=True)
         for i in range(steps):
             print(f"Preforming Newton Raphson Step {i}")
-            self.newton_raphson_step()
-            self.visualize(plot_all=True)
+            matrix, gradient, change_vec = self.newton_raphson_step()
+            if visualize:
+                fig, ax = self.visualize(plot_all=True, show=False)
+                params = self.calculated_paths[-2].parameters
+                total_angle = self.calculated_paths[-2].total_angle
+                for n, param in enumerate(params[::int(len(change_vec)/25)]):
+                    # Plot change vec
+                    x_c, dx_c = param[0]*EARTH_RADIUS*total_angle/1000, 0
+                    # print(f"x, dx: {x_c, dx_c}")
+                    y_c, dy_c = (param[1] - EARTH_RADIUS)/1000 - 20, -change_vec[n]/100
+                    # print(f"y, dy: {y_c, dy_c}")
+                    ax.arrow(x_c, y_c, dx_c, dy_c, color='black', width=3, head_width=12)
+                    x_g, dx_g = param[0]*EARTH_RADIUS*total_angle/1000, 0
+                    y_g, dy_g = (param[1] - EARTH_RADIUS)/1000 + 20, gradient[n]/100
+                    ax.arrow(x_g, y_g, dx_g, dy_g, color='white', width=3,  head_width=12)
+                plt.show()
 
         return self.calculated_paths
 
     def newton_raphson_step(self, h=1000):
         matrix, gradient = self.calculate_derivatives(h=h)
         eof_string = '_'.join(map(str, self.parameters))
-        eof_string += f'_{self.frequency}'
+        eof_string += f'_{int(self.frequency/1000)}'
         try:
             savetxt(join_path("SavedData", f"Matrix{eof_string}.txt"), matrix)
             savetxt(join_path("SavedData", f"Gradient{eof_string}.txt"), gradient)
@@ -223,12 +237,17 @@ class Tracer:
             savetxt(f"CurrentParams{eof_string}.txt", self.calculated_paths[-1].parameters[:, 1])
         # Calculate diagonal matrix elements
 
-        b = matrix@self.calculated_paths[-1].parameters[:, 1] - gradient
-        next_params = sym_solve(matrix, b, assume_a='sym')
+        change = sym_solve(matrix, gradient, assume_a='sym')
+        change_mag = norm(change, ord=3)
+        print(f"Change magnitude: {change_mag}")
+        if change_mag > 1000*len(change):
+            change = change/change_mag*10000
+        next_params = self.calculated_paths[-1].parameters[:, 1] - change
         next_path = GreatCircleDeviationPC(*self.parameters, initial_parameters=next_params,
                                            initial_coordinate=self.initial_coordinates,
                                            final_coordinate=self.final_coordinates, using_spherical=False)
         self.calculated_paths.append(next_path)
+        return matrix, gradient, change
 
     def calculate_derivatives(self, h=1000):
         # We need to make sure our integration step size is significantly smaller than our derivative
@@ -298,14 +317,6 @@ class Tracer:
         estimated_yp = yt.copy()
         # solved_yp_old = zeros(step_number)
         max_fev = 200
-        # for n in range(step_number):
-        #     args_fsolve = x[n], y2[n], yt[n]
-        #     ret_val = hybrj(equation_13, equation_13_prime, asarray(estimated_yp[n]).flatten(), args_fsolve, 1,
-        #                     True, 1.50E-8, max_fev, 100, None)
-        #     if ret_val[-1] != 1:
-        #         print(f"Status: {errors.get(ret_val[-1])}")
-        #         print(f"{ret_val[1].get('nfev')} calls")
-        #     solved_yp_old[n] = ret_val[0]
         solved_yp = zeros(step_number)
         for n in range(step_number):
             args_fsolve = x[n], y2[n], yt[n]
@@ -345,17 +356,17 @@ class Tracer:
         # plt.plot(current_mu2, color='green')
         # plt.plot(norm(r_dot, axis=1), color='red')
         # plt.plot(current_pt, color='pink')
-        dp_array = current_mu2 * current_pt * norm(r_dot, axis=1)
         # plt.plot(dp_array, color='purple')
         # plt.show()
         # plt.plot(solved_yp, color='red')
         # plt.plot(zeros(len(yt)), color='black')
         # plt.plot(dp_array, color='green')
         # plt.show()
+        dp_array = current_mu2 * current_pt * norm(r_dot, axis=1)
         integration = simps(dp_array, dx=h)
         return integration
 
-    def visualize(self, plot_all=False):
+    def visualize(self, plot_all=False, show=True):
         fig, ax = plt.subplots(figsize=(6, 4.5), num=0)
         ax.set_title(f"3D Ray Trace with a {int(self.frequency/1E6)} MHz frequency")
         self.atmosphere.visualize(self.initial_coordinates, self.final_coordinates, fig=fig, ax=ax, point_number=200)
@@ -382,7 +393,10 @@ class Tracer:
         ax.plot(km_range, radii, color='black')
         ax.set_ylabel("Altitude (km)")
         ax.set_xlabel("Range (km)")
-        plt.show()
+        if show:
+            plt.show()
+        else:
+            return fig, ax
 
 
 if __name__ == "__main__":
@@ -396,7 +410,7 @@ if __name__ == "__main__":
     atmosphere = ChapmanLayers(7E6, 350E3, 100E3, (0.375E6 * 180 / PI, -1), initial)
     path_generator = QuasiParabolic
     frequency = 10E6  # Hz
-
+    # atmosphere.visualize(initial, final, ax=None, fig=None, point_number=400, show=True)
     basic_tracer = Tracer(frequency, atmosphere, field, path_generator)
     basic_tracer.parameters = (50, 0)
     basic_tracer.parameter_number = 50

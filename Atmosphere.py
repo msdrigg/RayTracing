@@ -8,7 +8,6 @@ from scipy.spatial.transform import Rotation
 class ChapmanLayers:
     def __init__(self, f0, hm, ym, gradient, start_point):
         self._parameters = array([f0, hm, ym])
-
         # Array-like parameter whose first element is the magnitude of the gradient in a unit of
         #   MHz per degree and whose second element is the parameter for the direction
         #   -1 for north, +1 for south, +2 for east, -2 for west
@@ -42,7 +41,7 @@ class ChapmanLayers:
             multiplier = multiplier + self.gradient[0] * sign(self.gradient[1]) * \
                       (coordinate[:, abs(self.gradient[1])] -
                        cartesian_to_spherical(self.start_point)[abs(self.gradient[1])])
-        output = multiplier*exp(1 - z1 - exp(-z1))
+        output = multiplier*exp((1 - z1 - exp(-z1)))
 
         if len(output) == 1:
             return output[0]
@@ -69,6 +68,7 @@ class ChapmanLayers:
             frequency_grid[:, i] = self.plasma_frequency(plotted_vecs, using_spherical=True)/1E6
         image = ax.imshow(frequency_grid, cmap='gist_rainbow', interpolation='bilinear', origin='lower',
                           alpha=1, aspect='auto', extent=[0, total_angle*EARTH_RADIUS/1000, 0, 400])
+        ax.yaxis.set_ticks_position('both')
         color_bar = fig.colorbar(image, ax=ax)
         color_bar.set_label("Plasma Frequency (MHz)")
 
