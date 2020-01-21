@@ -1,16 +1,17 @@
 from abc import ABC, abstractmethod
 from numpy.linalg import norm
-from numpy import cross, outer, zeros, repeat, sin, cos, arccos, \
-    linspace, concatenate, array, log, sqrt, square, asarray
+from numpy import cross, outer, zeros, repeat, sin, cos, arccos, tan, arctan2, \
+    linspace, concatenate, array, log, sqrt, square, asarray, finfo
 from numpy import where as where_array
 import Vector
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation
-from scipy.optimize import fsolve
+from scipy.optimize import root_scalar
 from Atmosphere import ChapmanLayers
 from Constants import PI, E_CHARGE, E_MASS, EARTH_RADIUS, EPSILON_0
-from math import acos, cos, atan
 from matplotlib import pyplot as plt
+import hyperdual
+from numpy import hyperdual as np_hd
 
 
 class Path(ABC):
@@ -50,7 +51,7 @@ class QuasiParabolic(Path):
             f_1 = atmosphere_model.plasma_frequency(midpoint)
             f_0 = atmosphere_model.parameters[0]
             gradient_effect = f_1 - f_0
-        self._parameters = self.calculate_parameters(atmosphere_model, gradient_effect, wave_frequency)
+        self._parameters = self.calculate_parameters(atmosphere_model, gradient_effect, wave_frequency, high=True)
         # Point number is the number of points to calculate. All points in between are interpolated from PC spline
         if point_number is not None:
             self.point_number = point_number
@@ -99,35 +100,45 @@ class QuasiParabolic(Path):
             return output_vecs
 
     def compile_points(self):
-        e_max, rm, rb, ym, f = self._parameters
+        fc, rm, rb, ym, f = self._parameters
         rm = rm + EARTH_RADIUS
         rb = rb + EARTH_RADIUS
-        fc = sqrt(80.62*e_max)
         a = 1 - (fc/f)**2 + (fc*rb/(f*ym))**2
         b = -2 * rm * (fc * rb / (f * ym)) ** 2
         total_angle = Vector.angle_between(self.initial_point, self.final_point)
 
         def beta_solver(beta_0_g):
             # According to equation 8 in the hill 1979 paper
-            beta_0_g = beta_0_g[0]
-            beta_b_g = acos(EARTH_RADIUS*cos(beta_0_g)/rb)
+            beta_b_g = arccos(EARTH_RADIUS*cos(beta_0_g)/rb)
             xb_g = rb**2 - (EARTH_RADIUS**2) * (cos(beta_0_g))**2
             c_g = (fc * rb * rm / (f * ym)) ** 2 - \
                   (EARTH_RADIUS ** 2) * (cos(beta_0_g)) ** 2
             adder = EARTH_RADIUS*(beta_b_g - (total_angle/2 + beta_0_g))
-            # print(f"Adder: {adder}")
+            print(f"Adder: {adder.__str__()}")
             multiplier = (EARTH_RADIUS**2) * (cos(beta_0_g)) / sqrt(c_g)
-            # print(f"Multiplier: {multiplier}")
+            print(f"Multiplier: {multiplier.__str__()}")
             numerator = 2*c_g + b*rb + 2*sqrt(c_g*xb_g)
-            # print(f"Numerator: {numerator}")
+            print(f"Numerator: {numerator.__str__()}")
             denominator = rb*sqrt(b**2 - 4*a*c_g)
-            # print(f"Denominator: {denominator}")
+            print(f"Denominator: {denominator.__str__()}")
             output = adder + multiplier * log(numerator/denominator)
-            # print(f"Output: {output}")
-            return array([output])
+            print(f"Output: {output.__str__()}")
+            return output
 
-        def beta_solver_prime(beta_0_g_vec):
-            beta_0_g = beta_0_g_vec[0]
+        def beta_solver_prime_hd(beta_0_g, nu=1):
+            #TODO: Compare these two methods
+            print(f"Beta guess: {beta_0_g}")
+            perturbation_mag = sqrt(finfo(float).eps)*100
+            perturbation = np_hd(0, perturbation_mag*beta_0_g, perturbation_mag*beta_0_g, 0)
+            beta_0_g_hd = beta_0_g + perturbation
+            output = beta_solver(beta_0_g_hd)
+            if nu == 1:
+                return output.f1/perturbation_mag
+            elif nu == 2:
+                return output.f12/(perturbation_mag**2)
+            raise NotImplementedError("Only first and second derivatives are implimented currently.")
+
+        def beta_solver_prime(beta_0_g):
             xb_g = rb**2 - (EARTH_RADIUS**2) * (cos(beta_0_g))**2
             c_g = (fc * rb * rm / (f * ym)) ** 2 - \
                   (EARTH_RADIUS ** 2) * (cos(beta_0_g)) ** 2
@@ -143,12 +154,12 @@ class QuasiParabolic(Path):
             denominator = rb*sqrt(b**2 - 4*a*c_g)
             output = adder_prime + mult_prime*log(numerator/denominator) + \
                 multiplier*(denominator/numerator)*(denominator*num_prime - denom_prime*numerator)/denominator**2
-            return array([output])
+            return output
 
         # Guessing beta_0 assuming that the ray travels a straight line and meets between the
         # final and initial point at the point of greatest atmospheric e-density
         d_perp = norm(self.final_point*self.points[0, 1] - self.initial_point*self.points[-1, 1])
-        alpha_0 = atan((rm - EARTH_RADIUS)/(d_perp/2))
+        alpha_0 = arctan2(rm - EARTH_RADIUS, d_perp/2)
         beta_0_initial_guess = alpha_0 - total_angle/2
         while b**2 < 4*a*((fc * rb * rm / (f * ym)) ** 2 -
                           (EARTH_RADIUS ** 2) * (cos(beta_0_initial_guess)) ** 2):
@@ -156,16 +167,24 @@ class QuasiParabolic(Path):
             if beta_0_initial_guess < .02:
                 raise OverflowError(f"Too many runs {beta_0_initial_guess}")
             beta_0_initial_guess *= 2.0/3.0
-        guess = array([beta_0_initial_guess])
-        beta_0, info_dict, ier, msg = fsolve(beta_solver, guess, fprime=beta_solver_prime, full_output=True)
-        if ier != 1:
-            print(f"Error on fsolve: {msg}")
-            print(f"Function Call Number: {info_dict['nfev']}")
-            print(f"Last solution before failure: {beta_0}")
+        print(f"Beta initial guess: {beta_0_initial_guess}")
+        guess = .464
+        rootresult = root_scalar(beta_solver, x0=guess,
+                                 fprime=lambda val: beta_solver_prime_hd(val, nu=1),
+                                 fprime2=lambda val: beta_solver_prime_hd(val, nu=2),
+                                 method='newton', bracket=(0, PI/3)
+                                 )
+        print(rootresult.iterations, rootresult.converged)
+        print(rootresult.root)
+        beta_0 = rootresult.root
+        # if ier != 1:
+        #     print(f"Function Call Number: {info_dict['nfev']}")
+        #     print(f"Last solution before failure: {beta_0}")
+        #     raise RuntimeError(f"Error on beta_0 fsolve: {msg}")
 
         c = (fc*rb*rm/(f*ym))**2 - (EARTH_RADIUS*cos(beta_0))**2
         xb = rb**2 - (EARTH_RADIUS*cos(beta_0))**2
-        beta_b = acos(EARTH_RADIUS*cos(beta_0)/rb)
+        beta_b = arccos(EARTH_RADIUS*cos(beta_0)/rb)
         apogee = -(b + sqrt(b**2 - 4*a*c))/(2*a)
 
         # We want 2 params for the straight part and 2 additional parameter per degree of longitude
@@ -176,9 +195,11 @@ class QuasiParabolic(Path):
         increasing = linspace(EARTH_RADIUS, apogee, int((len(radius_params))/2) + 1)
         radius_params[:int(len(radius_params)/2) + 1, 1] = increasing
         radius_params[int(len(radius_params)/2):, 1] = increasing[::-1]  # Flip it
-        plt.plot(radius_params[:, 1])
-        plt.show()
-
+        # plt.plot(radius_params[:, 1])
+        # plt.show()
+        print(f"Beta_0: {beta_0}")
+        print(f"F_c: {fc}")
+        print(f"R_b: {rb}")
         def d_t(radius_vectorized):
             below_output = EARTH_RADIUS*(arccos(EARTH_RADIUS*cos(beta_0)/radius_vectorized) - beta_0)
             x = a*square(radius_vectorized) + b*radius_vectorized + c
@@ -219,19 +240,18 @@ class QuasiParabolic(Path):
         return self._poly_fit
 
     @staticmethod
-    def calculate_parameters(atmosphere_model, gradient_effect, wave_frequency, high=False):
+    def calculate_parameters(atmosphere_model, gradient_effect, wave_frequency, high=True):
         if not isinstance(atmosphere_model, ChapmanLayers):
             raise NotImplementedError("Only chapman layers currently implemented.")
-        e_max = (((atmosphere_model.parameters[0] + gradient_effect) * 2 * PI) ** 2) * \
-            E_MASS * EPSILON_0 / E_CHARGE ** 2
+        f_max = (atmosphere_model.parameters[0] + gradient_effect)
         rm = atmosphere_model.parameters[1]
         ym = atmosphere_model.parameters[2]
         if high:
-            rb = min(rm - ym, 100E3)
+            rb = min(rm - ym, 100E3 + EARTH_RADIUS)
+            print(f_max/wave_frequency)
         else:
-            rb = min(rm - ym, 200E3)
-            e_max *= 1.5
-        return array([e_max, rm, rb, ym, wave_frequency])
+            rb = rm - ym
+        return array([f_max, rm, rb, ym, wave_frequency])
 
 
 class GreatCircleDeviationPC(Path):

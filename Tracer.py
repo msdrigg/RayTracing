@@ -290,6 +290,7 @@ class Tracer:
         print("Calculating Derivatives for the off diagonal elements")
         elements = int(self.parameter_number*(self.parameter_number-1)/2)
         print(f"Expecting {elements*4} integrations")
+
         # Parallelize calculation of directional off diagonal derivatives
         off_diagonal_d_results = pool.map(off_diagonal_dirs, zip([self for _ in range(elements)],
                                                                  [pair_generator(n, self.parameter_number)
@@ -409,7 +410,7 @@ if __name__ == "__main__":
             array([EARTH_RADIUS, 90 + 23.5 - 10, 133.7])))
     atmosphere = ChapmanLayers(7E6, 350E3, 100E3, (0.375E6 * 180 / PI, -1), initial)
     path_generator = QuasiParabolic
-    frequency = 10E6  # Hz
+    frequency = 16E6  # Hz
     # atmosphere.visualize(initial, final, ax=None, fig=None, point_number=400, show=True)
     basic_tracer = Tracer(frequency, atmosphere, field, path_generator)
     basic_tracer.parameters = (50, 0)
