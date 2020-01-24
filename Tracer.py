@@ -410,7 +410,7 @@ if __name__ == "__main__":
             array([EARTH_RADIUS, 90 + 23.5 - 10, 133.7])))
     atmosphere = ChapmanLayers(7E6, 350E3, 100E3, (0.375E6 * 180 / PI, -1), initial)
     path_generator = QuasiParabolic
-    frequency = 16E6  # Hz
+    frequency = 10E6  # Hz
     # atmosphere.visualize(initial, final, ax=None, fig=None, point_number=400, show=True)
     basic_tracer = Tracer(frequency, atmosphere, field, path_generator)
     basic_tracer.parameters = (50, 0)

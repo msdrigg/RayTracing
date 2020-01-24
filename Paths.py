@@ -6,7 +6,7 @@ from numpy import where as where_array
 import Vector
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation
-from scipy.optimize import root_scalar
+from scipy.optimize import root_scalar, fsolve
 from Atmosphere import ChapmanLayers
 from Constants import PI, E_CHARGE, E_MASS, EARTH_RADIUS, EPSILON_0
 from matplotlib import pyplot as plt
@@ -125,7 +125,7 @@ class QuasiParabolic(Path):
             print(f"Output: {output.__str__()}")
             return output
 
-        def beta_solver_prime_hd(beta_0_g, nu=1):
+        def beta_solver_prime_hd(beta_0_g, nu=0):
             #TODO: Compare these two methods
             print(f"Beta guess: {beta_0_g}")
             perturbation_mag = sqrt(finfo(float).eps)*100
@@ -136,7 +136,7 @@ class QuasiParabolic(Path):
                 return output.f1/perturbation_mag
             elif nu == 2:
                 return output.f12/(perturbation_mag**2)
-            raise NotImplementedError("Only first and second derivatives are implimented currently.")
+            raise NotImplementedError("Only first and second derivatives are implemented currently.")
 
         def beta_solver_prime(beta_0_g):
             xb_g = rb**2 - (EARTH_RADIUS**2) * (cos(beta_0_g))**2
@@ -169,8 +169,8 @@ class QuasiParabolic(Path):
             beta_0_initial_guess *= 2.0/3.0
         print(f"Beta initial guess: {beta_0_initial_guess}")
         guess = .464
-        rootresult = root_scalar(beta_solver, x0=guess,
-                                 fprime=lambda val: beta_solver_prime_hd(val, nu=1),
+        rootresult = fsolve(beta_solver, guess=guess,
+                                 fprime=lambda val: beta_solver_prime(val, nu=1),
                                  fprime2=lambda val: beta_solver_prime_hd(val, nu=2),
                                  method='newton', bracket=(0, PI/3)
                                  )
