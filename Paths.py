@@ -1,20 +1,50 @@
 from abc import ABC, abstractmethod
 from numpy.linalg import norm
-from numpy import cross, outer, zeros, repeat, sin, cos, arccos, tan, arctan2, \
-    linspace, concatenate, array, log, sqrt, square, asarray, finfo
+from numpy import cross, outer, zeros, repeat, cos, arccos, arctan2, \
+    linspace, concatenate, array, log, sqrt, square, asarray, amax
 from numpy import where as where_array
 import Vector
-from scipy.interpolate import CubicSpline
+from scipy.interpolate import UnivariateSpline
 from scipy.spatial.transform import Rotation
-from scipy.optimize import root_scalar, fsolve
-from Atmosphere import ChapmanLayers
-from Constants import PI, E_CHARGE, E_MASS, EARTH_RADIUS, EPSILON_0
+from scipy.optimize import fsolve
+from Constants import PI, EARTH_RADIUS, TYPE_ABBREVIATION
 from matplotlib import pyplot as plt
-import hyperdual
-from numpy import hyperdual as np_hd
 
 
 class Path(ABC):
+    def visualize(self, fig=None, ax=None, show=True, frequency=None, color=None):
+        if fig is None or ax is None:
+            fig, ax = plt.subplots(figsize=(6, 4.5), num=0)
+        if frequency is None:
+            _frequency = "?"
+        else:
+            _frequency = int(frequency/1E6)
+        ax.set_title(f"3D Ray Trace")
+        ax.autoscale(False)
+        if color is None:
+            _color = 'black'
+        else:
+            _color = color
+        class_type = self.__class__.__name__
+        _label = f'{TYPE_ABBREVIATION[class_type]} - {_frequency} MHz'
+        angular_distance = linspace(0, 1, 100)
+        radii = self(angular_distance, use_spherical=True)[:, 0]
+        radii = (radii - EARTH_RADIUS) / 1000
+        km_range = angular_distance * self.total_angle * EARTH_RADIUS / 1000
+        max_x = km_range[-1]
+        max_y = amax(radii)
+        plt.xlim(-max_x*.05, max_x*1.05)
+        plt.ylim(-max_y*.05, max_y*1.05)
+        ax.plot(km_range, radii, color=_color, label=_label)
+        ax.legend()
+        ax.set_ylabel("Altitude (km)")
+        ax.set_xlabel("Range (km)")
+
+        if show:
+            plt.show()
+        else:
+            return fig, ax
+
     @property
     @abstractmethod
     def parameters(self):
@@ -24,18 +54,24 @@ class Path(ABC):
     def __call__(self, fraction, nu=0, use_spherical=False):
         pass
 
+    @property
+    def total_angle(self):
+        return None
+
 
 class QuasiParabolic(Path):
     # Currently, must initialize with a cartesian vector
     # This class needs less optimization because its just a starting point.
-    def __init__(self, initial_coordinates, final_coordinates,
-                 atmosphere_model, wave_frequency, point_number=None):
+    def __init__(self, initial_coordinates, final_coordinates, atmosphere_model,
+                 wave_frequency, degree=4, point_number=None):
         # Initial and final points are normalized, but poly_fit(0) and poly_fit(1) will return the radial component
         # for the initial and final point
         initial_rad, final_rad = norm(initial_coordinates), norm(final_coordinates)
         self.initial_point, self.final_point = initial_coordinates, final_coordinates
         self.initial_point, self.final_point = self.initial_point/norm(self.initial_point), \
             self.final_point/norm(self.final_point)
+
+        self.degree = degree
 
         self.normal_vec = cross(self.initial_point, self.final_point)
         self.normal_vec = self.normal_vec/norm(self.normal_vec)
@@ -51,7 +87,7 @@ class QuasiParabolic(Path):
             f_1 = atmosphere_model.plasma_frequency(midpoint)
             f_0 = atmosphere_model.parameters[0]
             gradient_effect = f_1 - f_0
-        self._parameters = self.calculate_parameters(atmosphere_model, gradient_effect, wave_frequency, high=True)
+        self._parameters = self.calculate_parameters(atmosphere_model, gradient_effect, wave_frequency)
         # Point number is the number of points to calculate. All points in between are interpolated from PC spline
         if point_number is not None:
             self.point_number = point_number
@@ -67,7 +103,14 @@ class QuasiParabolic(Path):
 
         # Real representation of the line will be a poly fit of radius vs angle along great circle
         self._poly_fit = None
+        self._total_angle = None
         self.compile_points()
+
+    @property
+    def total_angle(self):
+        if self._total_angle is None:
+            self._total_angle = Vector.angle_between(self.initial_point, self.final_point)
+        return self._total_angle
 
     @property
     def parameters(self):
@@ -82,16 +125,17 @@ class QuasiParabolic(Path):
 
     def __call__(self, fraction, use_spherical=False, **kwargs):
         # Nu is not allowed as a parameter
-        # This isn't optimized but its ok
-
+        if "nu" in kwargs and kwargs.get("nu") != 0:
+            raise(NotImplementedError("Quasiparabolic class does not have derivative capabilities."))
         if self._poly_fit is None:
             self.compile_points()
         alpha = fraction*self.points[-1, 0]
+
         rotations = Rotation.from_rotvec(outer(alpha, self.normal_vec))
         rotated_vecs = rotations.apply(self.initial_point)
         if use_spherical:
             output_vecs = Vector.cartesian_to_spherical(rotated_vecs)
-            output_vecs[0] = self._poly_fit(alpha)
+            output_vecs[:, 0] = self._poly_fit(alpha)
         else:
             output_vecs = rotated_vecs*self._poly_fit(alpha).reshape(-1, 1)
         if len(output_vecs) == 1:
@@ -101,8 +145,6 @@ class QuasiParabolic(Path):
 
     def compile_points(self):
         fc, rm, rb, ym, f = self._parameters
-        rm = rm + EARTH_RADIUS
-        rb = rb + EARTH_RADIUS
         a = 1 - (fc/f)**2 + (fc*rb/(f*ym))**2
         b = -2 * rm * (fc * rb / (f * ym)) ** 2
         total_angle = Vector.angle_between(self.initial_point, self.final_point)
@@ -114,46 +156,10 @@ class QuasiParabolic(Path):
             c_g = (fc * rb * rm / (f * ym)) ** 2 - \
                   (EARTH_RADIUS ** 2) * (cos(beta_0_g)) ** 2
             adder = EARTH_RADIUS*(beta_b_g - (total_angle/2 + beta_0_g))
-            print(f"Adder: {adder.__str__()}")
             multiplier = (EARTH_RADIUS**2) * (cos(beta_0_g)) / sqrt(c_g)
-            print(f"Multiplier: {multiplier.__str__()}")
             numerator = 2*c_g + b*rb + 2*sqrt(c_g*xb_g)
-            print(f"Numerator: {numerator.__str__()}")
             denominator = rb*sqrt(b**2 - 4*a*c_g)
-            print(f"Denominator: {denominator.__str__()}")
             output = adder + multiplier * log(numerator/denominator)
-            print(f"Output: {output.__str__()}")
-            return output
-
-        def beta_solver_prime_hd(beta_0_g, nu=0):
-            #TODO: Compare these two methods
-            print(f"Beta guess: {beta_0_g}")
-            perturbation_mag = sqrt(finfo(float).eps)*100
-            perturbation = np_hd(0, perturbation_mag*beta_0_g, perturbation_mag*beta_0_g, 0)
-            beta_0_g_hd = beta_0_g + perturbation
-            output = beta_solver(beta_0_g_hd)
-            if nu == 1:
-                return output.f1/perturbation_mag
-            elif nu == 2:
-                return output.f12/(perturbation_mag**2)
-            raise NotImplementedError("Only first and second derivatives are implemented currently.")
-
-        def beta_solver_prime(beta_0_g):
-            xb_g = rb**2 - (EARTH_RADIUS**2) * (cos(beta_0_g))**2
-            c_g = (fc * rb * rm / (f * ym)) ** 2 - \
-                  (EARTH_RADIUS ** 2) * (cos(beta_0_g)) ** 2
-            adder_prime = EARTH_RADIUS*(EARTH_RADIUS/rb * sin(beta_0_g) /
-                                        sqrt(1 - (EARTH_RADIUS*cos(beta_0_g)/rb)**2) - 1)
-            c_prime = EARTH_RADIUS**2 * sin(2 * beta_0_g)
-            mult_prime = (EARTH_RADIUS * fc * rb * rm)**2 * sin(beta_0_g) / \
-                         (sqrt(c_g)*((EARTH_RADIUS*f*ym*cos(beta_0_g))**2 - (fc * rb * rm)**2))
-            num_prime = 2*c_prime + c_prime*(xb_g + c_g)/sqrt(c_g*xb_g)
-            denom_prime = -2*rb*a*c_prime/sqrt(b**2 - 4*a*c_g)
-            multiplier = (EARTH_RADIUS**2) * (cos(beta_0_g)) / sqrt(c_g)
-            numerator = 2*c_g + b*rb + 2*sqrt(c_g*xb_g)
-            denominator = rb*sqrt(b**2 - 4*a*c_g)
-            output = adder_prime + mult_prime*log(numerator/denominator) + \
-                multiplier*(denominator/numerator)*(denominator*num_prime - denom_prime*numerator)/denominator**2
             return output
 
         # Guessing beta_0 assuming that the ray travels a straight line and meets between the
@@ -167,20 +173,13 @@ class QuasiParabolic(Path):
             if beta_0_initial_guess < .02:
                 raise OverflowError(f"Too many runs {beta_0_initial_guess}")
             beta_0_initial_guess *= 2.0/3.0
-        print(f"Beta initial guess: {beta_0_initial_guess}")
-        guess = .464
-        rootresult = fsolve(beta_solver, guess=guess,
-                                 fprime=lambda val: beta_solver_prime(val, nu=1),
-                                 fprime2=lambda val: beta_solver_prime_hd(val, nu=2),
-                                 method='newton', bracket=(0, PI/3)
-                                 )
-        print(rootresult.iterations, rootresult.converged)
-        print(rootresult.root)
-        beta_0 = rootresult.root
-        # if ier != 1:
-        #     print(f"Function Call Number: {info_dict['nfev']}")
-        #     print(f"Last solution before failure: {beta_0}")
-        #     raise RuntimeError(f"Error on beta_0 fsolve: {msg}")
+
+        beta_0, info_dict, ier, msg = fsolve(beta_solver, x0=beta_0_initial_guess, full_output=True)
+        print(f"Beta_0: {beta_0}")
+        if ier != 1:
+            print(f"Function Call Number: {info_dict['nfev']}")
+            print(f"Last solution before failure: {beta_0}")
+            raise RuntimeError(f"Error on beta_0 fsolve: {msg}")
 
         c = (fc*rb*rm/(f*ym))**2 - (EARTH_RADIUS*cos(beta_0))**2
         xb = rb**2 - (EARTH_RADIUS*cos(beta_0))**2
@@ -192,14 +191,10 @@ class QuasiParabolic(Path):
         radius_params[::len(radius_params) - 1, 1] = self.points[0, 1], self.points[-1, 1]
         radius_params[-1, 0] = total_angle
 
-        increasing = linspace(EARTH_RADIUS, apogee, int((len(radius_params))/2) + 1)
+        increasing = linspace(EARTH_RADIUS, apogee[0], int((len(radius_params))/2) + 1)
         radius_params[:int(len(radius_params)/2) + 1, 1] = increasing
         radius_params[int(len(radius_params)/2):, 1] = increasing[::-1]  # Flip it
-        # plt.plot(radius_params[:, 1])
-        # plt.show()
-        print(f"Beta_0: {beta_0}")
-        print(f"F_c: {fc}")
-        print(f"R_b: {rb}")
+
         def d_t(radius_vectorized):
             below_output = EARTH_RADIUS*(arccos(EARTH_RADIUS*cos(beta_0)/radius_vectorized) - beta_0)
             x = a*square(radius_vectorized) + b*radius_vectorized + c
@@ -209,29 +204,21 @@ class QuasiParabolic(Path):
             adder = EARTH_RADIUS*(beta_b - beta_0)
             above_output = adder + multiplier*log(numerator/denominator)
             output = where_array(radius_vectorized <= rb, below_output, above_output)
-            plt.plot(radius_vectorized, below_output, color='blue')
-            plt.plot(radius_vectorized, above_output, color='green')
-            plt.plot(radius_vectorized, output, color='pink')
-            plt.show()
             return output
-        # plt.plot(radius_params[:, 1], color='blue')
-        # plt.show()
-        # decider = b**2 - 4*a*c
-        # d_half = EARTH_RADIUS*(beta_b - cos(beta_0)) + \
-        #     EARTH_RADIUS**2 * cos(beta_0)/sqrt(c) * log((2*c + b*rb + 2 * sqrt(xb * c))/(rb * sqrt(b**2 - 4*a*c)))
+
         radius_params[:int(len(radius_params)/2) + 1, 0] = \
             d_t(radius_params[:int(len(radius_params)/2) + 1, 1]) / EARTH_RADIUS
         radius_params[int(len(radius_params)/2) + 1:, 0] = \
             total_angle - d_t(radius_params[int(len(radius_params)/2) + 1:, 1]) / EARTH_RADIUS
-        # radius_params[:, 0] = where_array()
 
         self.points = radius_params
+        self._total_angle = total_angle
         # plt.plot(radius_params[:, 0], radius_params[:, 1], color='blue')
-        plt.plot(radius_params[:, 0], radius_params[:, 1], color='green')
-        plt.plot(radius_params[:, 0], repeat(rb, len(radius_params)), color='black')
-        plt.show()
-        self._poly_fit = CubicSpline(radius_params[:, 0], radius_params[:, 1],
-                                     bc_type='natural', extrapolate=True)
+        # plt.plot(radius_params[:, 0], radius_params[:, 1], color='green')
+        # plt.plot(radius_params[:, 0], repeat(rb, len(radius_params)), color='black')
+        # plt.show()
+        self._poly_fit = UnivariateSpline(radius_params[:, 0], radius_params[:, 1],
+                                          k=self.degree, s=0, ext=0)
 
     @property
     def poly_fit(self):
@@ -240,21 +227,17 @@ class QuasiParabolic(Path):
         return self._poly_fit
 
     @staticmethod
-    def calculate_parameters(atmosphere_model, gradient_effect, wave_frequency, high=True):
-        if not isinstance(atmosphere_model, ChapmanLayers):
-            raise NotImplementedError("Only chapman layers currently implemented.")
+    def calculate_parameters(atmosphere_model, gradient_effect, wave_frequency):
         f_max = (atmosphere_model.parameters[0] + gradient_effect)
         rm = atmosphere_model.parameters[1]
         ym = atmosphere_model.parameters[2]
-        if high:
-            rb = min(rm - ym, 100E3 + EARTH_RADIUS)
-            print(f_max/wave_frequency)
-        else:
-            rb = rm - ym
+        rb = rm - ym
+        if atmosphere_model.plasma_frequency(array([rb, 0, 0]), using_spherical=True) < 0:
+            raise(RuntimeError("RB allows for negative atmosphere."))
         return array([f_max, rm, rb, ym, wave_frequency])
 
 
-class GreatCircleDeviationPC(Path):
+class GreatCircleDeviation(Path):
     def __init__(self, radial_deviations, angular_deviations, using_spherical=True, **kwargs):
         # Set the position of all parameters by concatenating the lists of radial deviations and angular deviations
         # Position is the angular location along the great circle connecting initial and final points
@@ -318,8 +301,6 @@ class GreatCircleDeviationPC(Path):
             self._radial_positions[:, 1] = qp_initial.poly_fit(radial_deviations*total_angle)
             self._radial_positions[0, 1] = norm(qp_initial(0))
             self._radial_positions[-1, 1] = norm(qp_initial(1))
-            # plt.plot(self._radial_positions[:, 0], self._radial_positions[:, 1])
-            # plt.show()
 
         self.final_point = Vector.unit_vector(self.final_point)
         self.initial_point = Vector.unit_vector(self.initial_point)
@@ -335,6 +316,8 @@ class GreatCircleDeviationPC(Path):
 
     @property
     def parameters(self):
+        # TODO: Make sure the parameters here match up with everything else without breaking them.
+        # todo: I think returning same format as they are entered in makes perfect sense
         return concatenate((self._radial_positions[1:-1], self._angular_deviations[1:-1]))
 
     @property
@@ -352,6 +335,8 @@ class GreatCircleDeviationPC(Path):
         self.interpolate_params()
 
     def adjust_parameters(self, indexes, adjustments, mutate=False):
+        # TODO: Add some parameters to control the adjustment rate to account for unresponsive parameters
+        #  specifically radial params in the case of GCD path
         adjusted_params = self.parameters
         indexes = asarray(indexes).flatten()
         copied_adjustments = asarray(adjustments).flatten()
@@ -363,14 +348,15 @@ class GreatCircleDeviationPC(Path):
         if self._poly_fit_cartesian is None:
             self.interpolate_params()
         if not mutate:
-            new_path = GreatCircleDeviationPC(
+            new_path = GreatCircleDeviation(
                 len(self._radial_positions) - 2,
                 len(self._angular_deviations) - 2,
                 initial_parameters=adjusted_params[:, 1],
                 initial_coordinate=self(0),
                 final_coordinate=self(1),
                 using_spherical=False
-                )
+            )
+
             new_path.interpolate_params()
             return new_path
         else:
@@ -380,6 +366,7 @@ class GreatCircleDeviationPC(Path):
             self.interpolate_params()
 
     def __call__(self, fraction, nu=0, use_spherical=False):
+        _ = self.poly_fit_cartesian
         point = array(list(map(lambda poly_fit: poly_fit(fraction, nu=nu), self._poly_fit_cartesian))).T
 
         if use_spherical:
@@ -415,29 +402,27 @@ class GreatCircleDeviationPC(Path):
             self._total_angle = Vector.angle_between(self.initial_point, self.final_point)
         return self._total_angle
 
-    def interpolate_params(self, radial=False):
-        self._poly_fit_angular = CubicSpline(self._angular_deviations[:, 0],
-                                             self._angular_deviations[:, 1],
-                                             bc_type='natural', extrapolate=True)
+    def interpolate_params(self, radial=False, degree=3):
+        self._poly_fit_angular = UnivariateSpline(self._angular_deviations[:, 0],
+                                                  self._angular_deviations[:, 1],
+                                                  k=min(degree, len(self._angular_deviations) - 1), s=0, ext=0)
         if radial:
-            self._poly_fit_radial = CubicSpline(self._radial_positions[:, 0],
-                                                self._radial_positions[:, 1],
-                                                bc_type='natural', extrapolate=True)
+            self._poly_fit_radial = UnivariateSpline(self._radial_positions[:, 0],
+                                                     self._radial_positions[:, 1],
+                                                     k=degree, s=0, ext=0)
         else:
             cartesian_points = zeros((len(self._radial_positions), 3))
             for index in range(len(self._radial_positions)):
                 alpha = self._radial_positions[index, 0]
-                r_1 = Rotation.from_rotvec(self.normal_vec * alpha)
+                r_1 = Rotation.from_rotvec(self.normal_vec * alpha * self.total_angle)
                 v_1 = r_1.apply(self.initial_point)
                 rotation_vec_2 = Vector.unit_vector(cross(self.normal_vec, v_1))
                 rotation_vec_2 *= self._poly_fit_angular(alpha)
                 r_2 = Rotation.from_rotvec(rotation_vec_2)
                 v_2 = r_2.apply(v_1)
                 v_2 *= self._radial_positions[index, 1]
-                # print(f"Rad pos: {self._radial_positions[:, 1] - EARTH_RADIUS}")
                 cartesian_points[index] = v_2
-
-            if self._poly_fit_cartesian is None:
-                self._poly_fit_cartesian = []
+            self._poly_fit_cartesian = []
             for index in range(3):
-                self._poly_fit_cartesian.append(CubicSpline(self._radial_positions[:, 0], cartesian_points[:, index]))
+                self._poly_fit_cartesian.append(UnivariateSpline(self._radial_positions[:, 0],
+                                                                 cartesian_points[:, index], k=degree, s=0))

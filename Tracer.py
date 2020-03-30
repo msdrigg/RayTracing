@@ -1,19 +1,24 @@
 from numpy import zeros, array, sqrt, linspace, \
-    square, asarray, absolute, savetxt, loadtxt
+    square, absolute, savetxt, repeat
 from numpy import sum as vector_sum
 from numpy.linalg import norm
 from Atmosphere import ChapmanLayers
 from Field import BasicField
-from Paths import QuasiParabolic, GreatCircleDeviationPC
+from Paths import QuasiParabolic, GreatCircleDeviation
 from scipy.linalg import solve as sym_solve
 from scipy.integrate import simps
-from scipy.optimize._minpack import _hybrj as hybrj
+# from scipy.optimize._minpack import _hybrj as hybrj
 import Vector
+from matplotlib import use as matplotlib_use
+matplotlib_use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 from Constants import PI, EARTH_RADIUS
 import multiprocessing as mp
+# import numpy as np
 from os.path import join as join_path
+# from mpl_toolkits.mplot3d import Axes3D
+# import os
 
 
 DEFAULT_PARAMS = 50, 5
@@ -32,19 +37,6 @@ errors = {0: "Improper input parameters were entered.",
              "as measured by the \n  improvement from the last "
              "ten iterations.",
           'unknown': "An error occurred."}
-
-
-# I wanted to make these static methods of the Tracer class but I think this is faster,
-#   and we really need the speed
-# def equation_13(yp, *args):
-#     yp2 = square(yp)
-#     x, y2, yt = args
-#
-#     fractions = equation_16(yp, yp2, x, y2)
-#     pt = equation_14(yp, yp2, y2, fractions, yt)
-#
-#     output = -1 + pt * (pt - yt * (1 - pt) * fractions * 0.5)
-#     return output
 
 
 # I wanted to make these static methods of the Tracer class but I think this is faster,
@@ -114,7 +106,7 @@ def equation_15(yp, x, y2):
     # We choose ordinary ray in our calculation of mu2
     yp2 = square(yp)
     return 1 - 2 * x * (1 - x) / (2 * (1 - x) - (y2 - yp2) +
-                                  sqrt(square((y2 - yp2)) + 4 * square(1 - x) * yp2))
+                                  sqrt(square(y2 - yp2) + 4 * square(1 - x) * yp2))
 
 
 def equation_16(yp, yp2, x, y2):
@@ -127,6 +119,14 @@ def equation_16(yp, yp2, x, y2):
 
 def off_diagonal_dirs(inputs):
     self, index_pair, curr_path, int_h, vary_h = inputs
+
+    # We know for a cubic spline, the derivative wrt parameter i within the integral only affects the spline
+    # in the interval (i - 2, i + 2) and for a quartic (i - 3, i + 3), so we consider
+    # two derivatives cannot affect each other if these intervals do not overlap.
+
+    if abs(index_pair[0] - index_pair[1]) > 9:
+        return array([index_pair[0], index_pair[1], 0])
+
     path_mm = curr_path.adjust_parameters([index_pair[0], index_pair[1]], -vary_h)
     p_mm = self.integrate_parameter(path_mm, h=int_h)
     path_mp = curr_path.adjust_parameters([index_pair[0], index_pair[1]], [-vary_h, vary_h])
@@ -136,9 +136,11 @@ def off_diagonal_dirs(inputs):
     path_pp = curr_path.adjust_parameters([index_pair[0], index_pair[1]], vary_h)
     p_pp = self.integrate_parameter(path_pp, h=int_h)
     output = (p_pp - p_pm - p_mp + p_mm) / (4 * vary_h ** 2)
-    if index_pair[0] % 5 == 0 and index_pair[1] == self.parameter_number - 1:
-        total = sum([self.parameter_number - row - 1 for row in range(index_pair[0], 0 - 1, -1)])
-        print(f"Completing Derivatives: {total*4}")
+
+    # total = (index_pair[0] + 1) * (self.parameter_number - 1) - int((index_pair[0] + 1) * (index_pair[0]) / 2)
+    # if total % 500 == 0:
+    #     print(f"Completed integration {total*4} of "
+    #           f"{int(self.parameter_number*(self.parameter_number-1)/2) * 4} (asynchronous)")
 
     return array([index_pair[0], index_pair[1], output])
 
@@ -185,14 +187,19 @@ class Tracer:
 
         self.initial_path = self.path_generator(self.initial_coordinates, self.final_coordinates,
                                                 self.atmosphere, self.frequency)
-        new_path = GreatCircleDeviationPC(*self.parameters, quasi_parabolic=self.initial_path)
+        new_path = GreatCircleDeviation(*self.parameters, quasi_parabolic=self.initial_path)
+        new_path.interpolate_params()
 
         if self.calculated_paths is None:
             self.calculated_paths = [new_path]
         else:
             self.calculated_paths.append(new_path)
 
-    def trace(self, steps=50, parameters=None, visualize=True):
+    def trace(self, steps=50, h=1000, parameters=None, visualize=True):
+        if visualize == 'save':
+            save_plots = True
+        else:
+            save_plots = False
         if parameters is not None:
             self.parameters = parameters
         elif self.parameters is None:
@@ -201,10 +208,13 @@ class Tracer:
 
         if self.calculated_paths is None:
             self.compile_initial_path()
-        self.visualize(plot_all=True)
-        for i in range(steps):
+        if visualize:
+            self.visualize(plot_all=True)
+
+        for i in range(1, steps):
             print(f"Preforming Newton Raphson Step {i}")
-            matrix, gradient, change_vec = self.newton_raphson_step()
+            matrix, gradient, change_vec = self.newton_raphson_step(h=h)
+
             if visualize:
                 fig, ax = self.visualize(plot_all=True, show=False)
                 params = self.calculated_paths[-2].parameters
@@ -212,44 +222,79 @@ class Tracer:
                 for n, param in enumerate(params[::int(len(change_vec)/25)]):
                     # Plot change vec
                     x_c, dx_c = param[0]*EARTH_RADIUS*total_angle/1000, 0
-                    # print(f"x, dx: {x_c, dx_c}")
-                    y_c, dy_c = (param[1] - EARTH_RADIUS)/1000 - 20, -change_vec[n]/100
-                    # print(f"y, dy: {y_c, dy_c}")
-                    ax.arrow(x_c, y_c, dx_c, dy_c, color='black', width=3, head_width=12)
+                    y_c, dy_c = (param[1] - EARTH_RADIUS)/1000 - 20, -change_vec[n*int(len(change_vec)/25)]/1000
+                    ax.arrow(x_c, y_c, dx_c, dy_c, color='black', width=3, head_width=12, head_length=12)
                     x_g, dx_g = param[0]*EARTH_RADIUS*total_angle/1000, 0
-                    y_g, dy_g = (param[1] - EARTH_RADIUS)/1000 + 20, gradient[n]/100
-                    ax.arrow(x_g, y_g, dx_g, dy_g, color='white', width=3,  head_width=12)
-                plt.show()
+                    y_g, dy_g = (param[1] - EARTH_RADIUS)/1000 + 20, gradient[n*int(len(change_vec)/25)]/1000
+                    ax.arrow(x_g, y_g, dx_g, dy_g, color='white', width=3,  head_width=12, head_length=12)
+
+                if save_plots:
+                    fig.savefig(join_path("SavedPlots", f'TotalChange_{i}.png'))
+                    plt.close(fig)
+                else:
+                    plt.show()
+                    plt.close(fig)
+
+                plt.plot(gradient)
+                plt.suptitle("Gradient Graph")
+                if save_plots:
+                    plt.savefig(join_path("SavedPlots", f'Gradient_{i}.png'))
+                    plt.close()
+                else:
+                    plt.show()
+                    plt.close()
+
+                current_p = self.integrate_parameter(self.calculated_paths[-1], h=0.00001, show=True, save=i)
+                print(f"Current total phase angle: {current_p}")
+                fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
+                image = ax.imshow(matrix)
+                color_bar = fig.colorbar(image, ax=ax)
+                color_bar.set_label("Second Derivative")
+                plt.suptitle("Matrix graph")
+
+                if save_plots:
+                    fig.savefig(join_path("SavedPlots", f'Hessian Matrix_{i}.png'))
+                    plt.close(fig)
+                else:
+                    plt.show()
+                    plt.close(fig)
+
+            if norm(change_vec) < 500*sqrt(len(change_vec)):
+                # Break if the change vec goes too small (small means a change of less than 500 m per position)
+                print(f"Ending with final change vector of {norm(change_vec)}")
+                break
 
         return self.calculated_paths
 
     def newton_raphson_step(self, h=1000):
         matrix, gradient = self.calculate_derivatives(h=h)
-        eof_string = '_'.join(map(str, self.parameters))
-        eof_string += f'_{int(self.frequency/1000)}'
-        try:
-            savetxt(join_path("SavedData", f"Matrix{eof_string}.txt"), matrix)
-            savetxt(join_path("SavedData", f"Gradient{eof_string}.txt"), gradient)
-            savetxt(join_path("SavedData", f"CurrentParams{eof_string}.txt"), self.calculated_paths[-1].parameters[:, 1])
-        except FileNotFoundError:
-            savetxt(f"Matrix{eof_string}.txt", matrix)
-            savetxt(f"Gradient{eof_string}.txt", gradient)
-            savetxt(f"CurrentParams{eof_string}.txt", self.calculated_paths[-1].parameters[:, 1])
-        # Calculate diagonal matrix elements
+        # print(f"Matrix shape: {matrix.shape}")
+        # print(f"Gradient shape: {gradient.shape}")
+        # eof_string = '_'.join(map(str, self.parameters))
+        # eof_string += f'_{int(self.frequency/1000)}'
+        # try:
+        #     savetxt(join_path("SavedData", f"Matrix{eof_string}.txt"), matrix)
+        #     savetxt(join_path("SavedData", f"Gradient{eof_string}.txt"), gradient)
+        #     savetxt(join_path("SavedData", f"CurrentParams{eof_string}.txt"),
+        #             self.calculated_paths[-1].parameters[:, 1])
+        # except FileNotFoundError:
+        #     savetxt(f"Matrix{eof_string}.txt", matrix)
+        #     savetxt(f"Gradient{eof_string}.txt", gradient)
+        #     savetxt(f"CurrentParams{eof_string}.txt", self.calculated_paths[-1].parameters[:, 1])
+        # # Calculate diagonal matrix elements
 
         change = sym_solve(matrix, gradient, assume_a='sym')
-        change_mag = norm(change, ord=3)
+        change_mag = norm(change)
         print(f"Change magnitude: {change_mag}")
-        if change_mag > 1000*len(change):
-            change = change/change_mag*10000
+
         next_params = self.calculated_paths[-1].parameters[:, 1] - change
-        next_path = GreatCircleDeviationPC(*self.parameters, initial_parameters=next_params,
-                                           initial_coordinate=self.initial_coordinates,
-                                           final_coordinate=self.final_coordinates, using_spherical=False)
+        next_path = GreatCircleDeviation(*self.parameters, initial_parameters=next_params,
+                                         initial_coordinate=self.initial_coordinates,
+                                         final_coordinate=self.final_coordinates, using_spherical=False)
         self.calculated_paths.append(next_path)
         return matrix, gradient, change
 
-    def calculate_derivatives(self, h=1000):
+    def calculate_derivatives(self, h=5000):
         # We need to make sure our integration step size is significantly smaller than our derivative
         #   or else our truncation error will be too large
         integration_step = 1/500.0
@@ -270,7 +315,7 @@ class Tracer:
                     counter += 1
             raise IndexError("You are indexing for a pair that doesn't exist")
 
-        pool = mp.Pool(mp.cpu_count() - 1)
+        pool = mp.Pool(mp.cpu_count() - 2)
         total_ints = 3*self.parameter_number
         print("Calculating Derivatives for the diagonal elements")
         print(f"Expecting {total_ints} diagonal integrations")
@@ -281,6 +326,7 @@ class Tracer:
                                           [self.calculated_paths[-1] for _ in range(self.parameter_number)],
                                           [integration_step for _ in range(self.parameter_number)],
                                           [h for _ in range(self.parameter_number)]))
+
         for result in diagonal_d_results:
             index = int(result[0])
             gradient[index] = result[1]
@@ -298,6 +344,8 @@ class Tracer:
                                                                  [self.calculated_paths[-1] for _ in range(elements)],
                                                                  [integration_step for _ in range(elements)],
                                                                  [h for _ in range(elements)]))
+        print("Closing Pool")
+        pool.close()
         for result in off_diagonal_d_results:
             row, col = int(result[0]), int(result[1])
             matrix[row, col] = result[2]
@@ -305,7 +353,7 @@ class Tracer:
         print("Completed off diagonal integrations")
         return matrix, gradient
 
-    def integrate_parameter(self, path, h=0.0001):
+    def integrate_parameter(self, path, h=0.00001, show=False, save=False):
         step_number = int(1/h)
         r = path(linspace(0, 1, step_number), nu=0)
         r_dot = path(linspace(0, 1, step_number), nu=1)
@@ -321,50 +369,60 @@ class Tracer:
         solved_yp = zeros(step_number)
         for n in range(step_number):
             args_fsolve = x[n], y2[n], yt[n]
-            ret_val = hybrj(equation_13_new, equation_13_prime_new, asarray(estimated_yp[n]).flatten(), args_fsolve, 1,
-                            True, 1.50E-8, max_fev, 100, None)
-            if ret_val[-1] != 1:
-                # print(f"Status: {errors.get(ret_val[-1])}")
-                print(f"{ret_val[1].get('nfev')} calls")
-            solved_yp[n] = ret_val[0]
+            # ret_val = hybrj(equation_13_new, equation_13_prime_new, asarray(estimated_yp[n]).flatten(), args_fsolve, 1,
+                            # True, 1.50E-8, max_fev, 100, None)
+            # if ret_val[-1] != 1:
+            #     print(f"Status: {errors.get(ret_val[-1])}")
+                # print(f"{ret_val[1].get('nfev')} calls")
+            # solved_yp[n] = ret_val[0]
+            solved_yp[n] = 0
 
-        # solved_yp2 = square(solved_yp)
-        # median_dir_yp = zeros(len(solved_yp))
-        # dir_yp = solved_yp[slice(1, len(solved_yp))] - solved_yp[slice(0, len(solved_yp)-1)]
-        # for i in range(len(solved_yp)):
-        #     median_dir_yp[i] = median(dir_yp[i-3: i+3])
-        # new_solved_yp = solved_yp.copy()
-        # indexes = where_array(absolute(dir_yp) > 0.01)[0]
-        # print(indexes)
-        # for i in where_array(absolute(dir_yp) > 0.01)[0]:
-        #     new_solved_yp[i+1] = new_solved_yp[i] + median_dir_yp[i]
-        # plt.plot(solved_yp_old, color='blue')
-        # plt.plot(solved_yp_old - solved_yp_new, color='red')
-        # plt.plot(median_dir_yp[217:272], color='green')
-        # plt.plot(dir_yp[217:272], color='red')
-        # plt.plot(solved_yp_new, color='black')
-        # plt.ylim([-0.1, 0.1])
-        # plt.show()
-        # print(solved_yp_new[solved_yp_new != solved_yp_old] - solved_yp_old[solved_yp_new != solved_yp_old])
-        # solved_yp = solved_yp_new
         solved_yp2 = square(solved_yp)
-        fractions = equation_16(solved_yp, solved_yp2, x, y2)
-        current_pt = equation_14(solved_yp, solved_yp2, y2, fractions, yt)
+        # fractions = equation_16(solved_yp, solved_yp2, x, y2)
+        # current_pt = equation_14(solved_yp, solved_yp2, y2, fractions, yt)
+        current_pt = repeat(1, step_number)
         solved_yp[current_pt < 0] = -solved_yp[current_pt < 0]
         current_pt = absolute(current_pt)
         current_mu2 = equation_15(solved_yp, x, y2)
-        # plt.plot(solved_yp, color='blue')
-        # plt.plot(current_mu2, color='green')
-        # plt.plot(norm(r_dot, axis=1), color='red')
-        # plt.plot(current_pt, color='pink')
-        # plt.plot(dp_array, color='purple')
+        rx = simps(r_dot[:, 0], dx=h)
+        ry = simps(r_dot[:, 1], dx=h)
+        rz = simps(r_dot[:, 2], dx=h)
+        # r_estimate = zeros((step_number, 3))
+        ip = self.initial_path.initial_point*self.initial_path.points[0, 1]
+        fp = self.initial_path.final_point*self.initial_path.points[-1, 1]
+        # r_estimate[0] = r[0]
+        # for i in range(1, step_number):
+        #     r_estimate[i, 0] = simps(r_dot[:i, 0], dx=h) + r[0, 0]
+        #     r_estimate[i, 1] = simps(r_dot[:i, 1], dx=h) + r[0, 1]
+        #     r_estimate[i, 2] = simps(r_dot[:i, 2], dx=h) + r[0, 2]
+        # r_estimate[-1] = r[-1]
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111, projection='3d')
+        # u = np.linspace(0, 2 * np.pi, 100)
+        # v = np.linspace(0, np.pi, 100)
+        # x = EARTH_RADIUS * np.outer(np.cos(u), np.sin(v))
+        # y = EARTH_RADIUS * np.outer(np.sin(u), np.sin(v))
+        # z = EARTH_RADIUS * np.outer(np.ones(np.size(u)), np.cos(v))
+        # ax.plot_surface(x, y, z, color='b', alpha=0.4)
+        # ax.plot3D(r[:, 0], r[:, 1], r[:, 2], 'red')
+        # ax.plot3D(r_estimate[:, 0], r_estimate[:, 1], r_estimate[:, 2], 'green')
         # plt.show()
-        # plt.plot(solved_yp, color='red')
-        # plt.plot(zeros(len(yt)), color='black')
-        # plt.plot(dp_array, color='green')
+        # plt.plot(r_dot[:, 0], color='blue')
+        # plt.plot(r_dot[:, 1], color='red')
+        # plt.plot(r_dot[:, 2], color='green')
         # plt.show()
-        dp_array = current_mu2 * current_pt * norm(r_dot, axis=1)
+        # print(f"Total r-dot: {array([rx, ry, rz])}.")
+        # print(f"Total change: {fp - ip}")
+        dp_array = sqrt(current_mu2) * current_pt * norm(r_dot, axis=1)
         integration = simps(dp_array, dx=h)
+        if show:
+            fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
+            ax.plot(dp_array)
+            if save is not None:
+                fig.savefig(join_path("SavedPlots", f'TotalPValues_{save}.png'))
+            else:
+                plt.show()
+            plt.close(fig)
         return integration
 
     def visualize(self, plot_all=False, show=True):
@@ -396,6 +454,7 @@ class Tracer:
         ax.set_xlabel("Range (km)")
         if show:
             plt.show()
+            plt.close(fig)
         else:
             return fig, ax
 

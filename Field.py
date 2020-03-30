@@ -1,14 +1,12 @@
+from abc import abstractmethod, ABC
+
 from Vector import cartesian_to_spherical, unit_radius, unit_theta, unit_vector, spherical_to_cartesian
-from Constants import B_FIELD, EARTH_RADIUS, E_CHARGE, E_MASS, PI
-from numpy import power, cos, sin, sqrt, square
+from Constants import B_FIELD, EARTH_RADIUS, B_FACTOR
+from numpy import power, cos, sin, sqrt, square, array, asarray, repeat
 
 
-class BasicField:
-    def __init__(self):
-        self.b_max = B_FIELD
-        self.re3 = power(EARTH_RADIUS, 3)  # E_Radius^3
-        self.b_factor = E_CHARGE/(2 * PI * E_MASS)  # Used to calculate gyro frequency
-
+class Field(ABC):
+    @abstractmethod
     def field_vec(self, position, using_spherical=False):
         """
         This function returns a normalized magnetic field vector using the given position vector
@@ -16,6 +14,31 @@ class BasicField:
         :param using_spherical - Boolean deciding the system of the position vector and return vector
         :returns The normalized magnetic field in the same coordinate system as the position vector
         """
+        pass
+
+    @abstractmethod
+    def field_mag(self, position, using_spherical=False):
+        """
+        This function returns the magnitude of the magnetic field given the parameters described above
+        """
+        pass
+
+    def gyro_frequency(self, position, using_spherical=False):
+        """
+        This function returns the gyro frequency at the given point using the class's defined functions for
+        b_factor and field_mag
+        """
+        if using_spherical:
+            position = spherical_to_cartesian(position)
+        return B_FACTOR * self.field_mag(position)
+
+
+class BasicField(Field):
+    def __init__(self):
+        self.b_max = B_FIELD
+        self.re3 = power(EARTH_RADIUS, 3)  # E_Radius^3
+
+    def field_vec(self, position, using_spherical=False):
         if not using_spherical:
             position = cartesian_to_spherical(position).reshape(-1, 3)
         # radii cubed is 1/r^3 for all r
@@ -45,7 +68,17 @@ class BasicField:
         else:
             return b_mags
 
+
+class ZeroField(Field):
+    def field_vec(self, position, using_spherical=False):
+        b_vec = array([1, 0, 0])
+        if not using_spherical:
+            b_vec = spherical_to_cartesian(b_vec)
+
+        return b_vec
+
+    def field_mag(self, position, using_spherical=False):
+        return repeat(0, len(position))
+
     def gyro_frequency(self, position, using_spherical=False):
-        if using_spherical:
-            position = spherical_to_cartesian(position)
-        return self.b_factor*self.field_mag(position)
+        return repeat(0, len(position))
