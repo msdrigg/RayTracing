@@ -9,6 +9,7 @@ from scipy.spatial.transform import Rotation
 from scipy.optimize import fsolve
 from Constants import PI, EARTH_RADIUS, TYPE_ABBREVIATION
 from matplotlib import pyplot as plt
+from os.path import join as join_path
 
 
 class Path(ABC):
@@ -166,7 +167,8 @@ class QuasiParabolic(Path):
         # final and initial point at the point of greatest atmospheric e-density
         d_perp = norm(self.final_point*self.points[0, 1] - self.initial_point*self.points[-1, 1])
         alpha_0 = arctan2(rm - EARTH_RADIUS, d_perp/2)
-        beta_0_initial_guess = alpha_0 - total_angle/2
+        beta_0_initial_guess = (alpha_0 - total_angle/2)*2
+        beta_0_initial_guess = 0.458
         while b**2 < 4*a*((fc * rb * rm / (f * ym)) ** 2 -
                           (EARTH_RADIUS ** 2) * (cos(beta_0_initial_guess)) ** 2):
             print(f"Reducing initial beta guess. New guess: {beta_0_initial_guess}")
@@ -184,14 +186,15 @@ class QuasiParabolic(Path):
         c = (fc*rb*rm/(f*ym))**2 - (EARTH_RADIUS*cos(beta_0))**2
         xb = rb**2 - (EARTH_RADIUS*cos(beta_0))**2
         beta_b = arccos(EARTH_RADIUS*cos(beta_0)/rb)
-        apogee = -(b + sqrt(b**2 - 4*a*c))/(2*a)
+        apogee = (-(b + sqrt(b**2 - 4*a*c))/(2*a))[0]
 
         # We want 2 params for the straight part and 2 additional parameter per degree of longitude
         radius_params = zeros([int(total_angle * 180 / PI) * 8 + 1, 2])
         radius_params[::len(radius_params) - 1, 1] = self.points[0, 1], self.points[-1, 1]
         radius_params[-1, 0] = total_angle
 
-        increasing = linspace(EARTH_RADIUS, apogee[0], int((len(radius_params))/2) + 1)
+        increasing = linspace(EARTH_RADIUS, apogee, int((len(radius_params))/2) + 1)
+        print(increasing)
         radius_params[:int(len(radius_params)/2) + 1, 1] = increasing
         radius_params[int(len(radius_params)/2):, 1] = increasing[::-1]  # Flip it
 
@@ -213,10 +216,9 @@ class QuasiParabolic(Path):
 
         self.points = radius_params
         self._total_angle = total_angle
-        # plt.plot(radius_params[:, 0], radius_params[:, 1], color='blue')
-        # plt.plot(radius_params[:, 0], radius_params[:, 1], color='green')
-        # plt.plot(radius_params[:, 0], repeat(rb, len(radius_params)), color='black')
-        # plt.show()
+        plt.plot(radius_params[:, 0], radius_params[:, 1], color='blue')
+        plt.plot(radius_params[:, 0], repeat(apogee, len(radius_params[:, 0])))
+        plt.savefig(join_path("SavedPlots", 'QP Plot.png'))
         self._poly_fit = UnivariateSpline(radius_params[:, 0], radius_params[:, 1],
                                           k=self.degree, s=0, ext=0)
 

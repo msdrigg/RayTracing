@@ -195,7 +195,7 @@ class Tracer:
         else:
             self.calculated_paths.append(new_path)
 
-    def trace(self, steps=50, h=1000, parameters=None, visualize=True):
+    def trace(self, steps=50, h=1000, parameters=None, visualize=True, arrows=False):
         if visualize == 'save':
             save_plots = True
         else:
@@ -219,14 +219,15 @@ class Tracer:
                 fig, ax = self.visualize(plot_all=True, show=False)
                 params = self.calculated_paths[-2].parameters
                 total_angle = self.calculated_paths[-2].total_angle
-                for n, param in enumerate(params[::int(len(change_vec)/25)]):
-                    # Plot change vec
-                    x_c, dx_c = param[0]*EARTH_RADIUS*total_angle/1000, 0
-                    y_c, dy_c = (param[1] - EARTH_RADIUS)/1000 - 20, -change_vec[n*int(len(change_vec)/25)]/1000
-                    ax.arrow(x_c, y_c, dx_c, dy_c, color='black', width=3, head_width=12, head_length=12)
-                    x_g, dx_g = param[0]*EARTH_RADIUS*total_angle/1000, 0
-                    y_g, dy_g = (param[1] - EARTH_RADIUS)/1000 + 20, gradient[n*int(len(change_vec)/25)]/1000
-                    ax.arrow(x_g, y_g, dx_g, dy_g, color='white', width=3,  head_width=12, head_length=12)
+                if arrows:
+                    for n, param in enumerate(params[::int(len(change_vec)/25)]):
+                        # Plot change vec
+                        x_c, dx_c = param[0]*EARTH_RADIUS*total_angle/1000, 0
+                        y_c, dy_c = (param[1] - EARTH_RADIUS)/1000 - 20, -change_vec[n*int(len(change_vec)/25)]/1000
+                        ax.arrow(x_c, y_c, dx_c, dy_c, color='black', width=3, head_width=12, head_length=12)
+                        x_g, dx_g = param[0]*EARTH_RADIUS*total_angle/1000, 0
+                        y_g, dy_g = (param[1] - EARTH_RADIUS)/1000 + 20, gradient[n*int(len(change_vec)/25)]/1000
+                        ax.arrow(x_g, y_g, dx_g, dy_g, color='white', width=3,  head_width=12, head_length=12)
 
                 if save_plots:
                     fig.savefig(join_path("SavedPlots", f'TotalChange_{i}.png'))
@@ -268,21 +269,6 @@ class Tracer:
 
     def newton_raphson_step(self, h=1000):
         matrix, gradient = self.calculate_derivatives(h=h)
-        # print(f"Matrix shape: {matrix.shape}")
-        # print(f"Gradient shape: {gradient.shape}")
-        # eof_string = '_'.join(map(str, self.parameters))
-        # eof_string += f'_{int(self.frequency/1000)}'
-        # try:
-        #     savetxt(join_path("SavedData", f"Matrix{eof_string}.txt"), matrix)
-        #     savetxt(join_path("SavedData", f"Gradient{eof_string}.txt"), gradient)
-        #     savetxt(join_path("SavedData", f"CurrentParams{eof_string}.txt"),
-        #             self.calculated_paths[-1].parameters[:, 1])
-        # except FileNotFoundError:
-        #     savetxt(f"Matrix{eof_string}.txt", matrix)
-        #     savetxt(f"Gradient{eof_string}.txt", gradient)
-        #     savetxt(f"CurrentParams{eof_string}.txt", self.calculated_paths[-1].parameters[:, 1])
-        # # Calculate diagonal matrix elements
-
         change = sym_solve(matrix, gradient, assume_a='sym')
         change_mag = norm(change)
         print(f"Change magnitude: {change_mag}")
