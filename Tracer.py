@@ -10,7 +10,7 @@ from scipy.integrate import simps
 # from scipy.optimize._minpack import _hybrj as hybrj
 import Vector
 from matplotlib import use as matplotlib_use
-matplotlib_use('Agg')
+# matplotlib_use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 from Constants import PI, EARTH_RADIUS
@@ -456,7 +456,7 @@ if __name__ == "__main__":
     atmosphere = ChapmanLayers(7E6, 350E3, 100E3, (0.375E6 * 180 / PI, -1), initial)
     path_generator = QuasiParabolic
     frequency = 10E6  # Hz
-    # atmosphere.visualize(initial, final, ax=None, fig=None, point_number=400, show=True)
+    atmosphere.visualize(initial, final, ax=None, fig=None, point_number=400, show=True)
     basic_tracer = Tracer(frequency, atmosphere, field, path_generator)
     basic_tracer.parameters = (50, 0)
     basic_tracer.parameter_number = 50
