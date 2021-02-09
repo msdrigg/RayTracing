@@ -61,19 +61,81 @@ def calculate_param_x_b(launch_angle: float, atmosphere_base_height: float) -> f
     return atmosphere_base_height ** 2 - (coords.EARTH_RADIUS * math.cos(launch_angle)) ** 2
 
 
-def get_angle_of_shortest_path(
-        atmosphere_height_of_max: float,
-        atmosphere_base_height: float,
-        atmosphere_max_e_density: float) -> float:
+def calculate_e_density(heights: np.ndarray, *atmosphere_params: float) -> np.ndarray:
+    """
+    // NOTE: UNTESTED
+    Returns the e density as a numpy array for the given heights. Heights are measured from origin not surface
+    """
+    atmosphere_height_of_max, atmosphere_base_height, atmosphere_max_e_density, operating_frequency = atmosphere_params
+    semi_width = atmosphere_height_of_max - atmosphere_base_height
+
+    term_2_numerator = (heights - atmosphere_height_of_max) * atmosphere_base_height
+    term_2_denominator = semi_width * heights
+    term_2 = np.square(term_2_numerator / term_2_denominator)
+
+    in_atmosphere_density = atmosphere_max_e_density * (1 - term_2)
+
+    return np.where(
+        (atmosphere_base_height < heights) & (atmosphere_base_height * atmosphere_height_of_max /
+                                              (atmosphere_base_height - semi_width) > heights),
+        atmosphere_max_e_density * in_atmosphere_density,
+        0
+    )
+
+
+def ground_distance_derivative(
+        launch_angle: float,
+        *atmosphere_params):
+    """
+    Calculates the derivative of ground distance with respect to launch angle
+    """
+    atmosphere_base_height = atmosphere_params[1]
+    a = calculate_param_a(*atmosphere_params)
+    b = calculate_param_b(*atmosphere_params)
+    c = calculate_param_c(launch_angle, *atmosphere_params)
+
+    discriminant = b ** 2 - 4 * a * c
+    x_b = calculate_param_x_b(launch_angle, atmosphere_base_height)
+    r_b2_minus_x_b = (coords.EARTH_RADIUS * math.cos(launch_angle) ) ** 2
+
+    log_numerator = (2 * c + 2 * math.sqrt(c * x_b)) + b * atmosphere_base_height
+    log_denominator = math.sqrt(discriminant) * atmosphere_base_height
+    log_term = math.log(log_numerator / log_denominator)
+
+    sqrt_c_x_b = math.sqrt(c * x_b)
+
+    neg_term_1 = -1
+    neg_term_2 = -coords.EARTH_RADIUS * log_term * math.sin(launch_angle) / math.sqrt(c)
+    neg_term_3 = -coords.EARTH_RADIUS * r_b2_minus_x_b * log_term * math.sin(launch_angle) / math.sqrt(c ** 3)
+
+    pos_term_1 = coords.EARTH_RADIUS * math.sin(launch_angle) / math.sqrt(x_b)
+
+    pos_term_2_numerator = ( 2 * coords.EARTH_RADIUS * r_b2_minus_x_b *
+                             (c + x_b + 2 * sqrt_c_x_b) * math.sin(launch_angle))
+    pos_term_2_denominator = math.sqrt(c) * (b * atmosphere_base_height * sqrt_c_x_b + 2 * c * (x_b + sqrt_c_x_b))
+    pos_term_2 = pos_term_2_numerator / pos_term_2_denominator
+
+    pos_term_3 = 4 * a * coords.EARTH_RADIUS ** 3 * (math.cos(launch_angle)) ** 2 * math.sin(launch_angle) / \
+        (math.sqrt(c) * discriminant)
+
+    return coords.EARTH_RADIUS * ((pos_term_1 + pos_term_2 + pos_term_3) + (neg_term_1 + neg_term_2 + neg_term_3))
+
+
+def get_angle_of_shortest_path(*atmosphere_params) -> float:
     """
     Calculates the angle that minimizes ground distance
-    :param atmosphere_max_e_density: see get_quasi_parabolic_path
-    :param atmosphere_base_height: see get_quasi_parabolic_path
-    :param atmosphere_height_of_max: see get_quasi_parabolic_path
     :return: The angle of launch (beta_0) that yields the shortest QP path
     """
-    
-    pass
+    try:
+        pedersen_angle = get_pedersen_angle(*atmosphere_params)
+        result, _ = optimize.bisect(lambda a: ground_distance_derivative(a, *atmosphere_params),
+                                    0, pedersen_angle - 1E-6,
+                                    disp=True, full_output=True)
+        return result
+
+    except ValueError:
+        raise ValueError("Attempting shortest path calculation for a atmosphere that will always reflect the ray."
+                         "You can assume the shortest path is pi/2")
 
 
 def get_pedersen_angle(
@@ -96,18 +158,27 @@ def get_pedersen_angle(
 
     a = calculate_param_a(*atmosphere_params)
     b = calculate_param_b(*atmosphere_params)
-    radical = -b * (atmosphere_base_height + b / (2 * a)) / 2
-    return math.acos(radical/coords.EARTH_RADIUS)
-
-
-def get_full_path_ground_distance(launch_angle: float, *atmosphere_args):
-    """
-    Returns the full distance along the ground in qp atmosphere
-    :param launch_angle: path launch angle
-    :param atmosphere_args: common atmosphere args including r_m, r_b, N_m, f
-    :return: the full distance in meters along the ground of the path
-    """
-    return get_apogee_ground_distance(launch_angle, *atmosphere_args) * 2
+    radical = -b * (atmosphere_height_of_max + b / (2 * a)) / 2
+    # import json
+    # print(json.dumps({
+    #     "a": a,
+    #     "b": b,
+    #     "c": c,
+    #     "xb": x_b,
+    #     "rb2minusxb": r_b2_minus_x_b,
+    #     "log_term": log_term,
+    #     "neg_term_2": neg_term_2,
+    #     "neg_term_3": neg_term_3,
+    #     "pos_term_1": pos_term_1,
+    #     "pos_term_2": pos_term_2,
+    #     "pos_term_3": pos_term_3
+    # }, indent=4))
+    try:
+        inside_term = math.sqrt(radical)/coords.EARTH_RADIUS
+        return math.acos(inside_term)
+    except ValueError:
+        raise ValueError("Error finding pedersen angle, due to. "
+                         "The likely cause is invalid atmosphere parameters.")
 
 
 def get_apogee_height(
@@ -149,6 +220,10 @@ def get_qp_ground_distances(
         heights: np.ndarray,
         *atmosphere_params) -> np.ndarray:
     """
+    NOTE: THIS FUNCTION IS THE ONLY UNTESTED FUNCTION.
+          IT LIKELY HAS BUGS AND/OR TYPOS. I DIDN'T TEST IT BECAUSE IT
+          ISN'T USED IN THE ACTUAL QP PATH CALCULATION.
+          TEST ON YOUR OWN BEFORE USING!!
     Gets the ground distances of a ray path in the qp atmosphere. See equation 6 in Hill 1979
     :param launch_angle: launch angle of the path
     :param heights: array of heights for which path ground distances will be computed.
@@ -182,7 +257,7 @@ def get_qp_ground_distances(
 
     inside_atmosphere_output = term_1 + multiplier * np.log(log_numerator / log_denominator)
 
-    output = np.where_array(heights <= atmosphere_base_height, below_atmosphere_output, inside_atmosphere_output)
+    output = np.where(heights <= atmosphere_base_height, below_atmosphere_output, inside_atmosphere_output)
     return output
 
 
@@ -250,9 +325,8 @@ def get_qp_heights(
 
     u_numerator = math.sqrt(c) * ((ground_distances_unified + coords.EARTH_RADIUS * launch_angle) -
                                   coords.EARTH_RADIUS * beta_b)
-    u_denominator = coords.EARTH_RADIUS * math.cos(launch_angle)
+    u_denominator = coords.EARTH_RADIUS ** 2 * math.cos(launch_angle)
     u = u_numerator / u_denominator
-
     v_numerator = 2 * c + atmosphere_base_height*b + 2 * math.sqrt(c * x_b)
     v_denominator = atmosphere_base_height * np.exp(u)
     v = v_numerator / v_denominator
@@ -261,7 +335,7 @@ def get_qp_heights(
     heights_denominator = (np.square(v) + b ** 2) - (4 * a * c + 2 * v * b)
 
     heights_above_atmosphere = heights_numerator / heights_denominator
-    beta = ground_distances / coords.EARTH_RADIUS - launch_angle
+    beta = ground_distances_unified / coords.EARTH_RADIUS + launch_angle
     heights_below_atmosphere = (coords.EARTH_RADIUS * math.cos(launch_angle)) / np.cos(beta)
 
     # Found by using equation 5 (Hill 1979) with r = r_b
@@ -270,7 +344,7 @@ def get_qp_heights(
     )
 
     return np.where(
-        ground_distances <= atmosphere_penetration_ground_distance,
+        ground_distances_unified <= atmosphere_penetration_ground_distance,
         heights_below_atmosphere,
         heights_above_atmosphere
     )
@@ -303,48 +377,70 @@ def get_quasi_parabolic_path(
         atmosphere_height_of_max, atmosphere_base_height,
         atmosphere_max_e_density, operating_frequency
     )
-    angle_of_shortest_path = get_angle_of_shortest_path(*atmosphere_params)
+    try:
+        angle_of_shortest_path = get_angle_of_shortest_path(*atmosphere_params)
+    except ValueError:
+        angle_of_shortest_path = math.pi/2
+
+    shortest_ground_distance = get_apogee_ground_distance(angle_of_shortest_path, *atmosphere_params) * 2
+    if shortest_ground_distance > path_ground_distance:
+        raise ValueError("Shortest ground distance possible in this atmosphere "
+                         "({}) is greater than the required ground distance {}"
+                         .format(shortest_ground_distance, path_ground_distance))
+
+    angle_calculation_intervals = ()
+    epsilon = 1E-7
+    try:
+        angle_of_shortest_path = get_angle_of_shortest_path(*atmosphere_params)
+        angle_calculation_intervals += (
+            (angle_of_shortest_path + epsilon,
+             get_pedersen_angle(*atmosphere_params) - epsilon),
+        )
+        angle_calculation_intervals += ((0 + epsilon, angle_of_shortest_path - epsilon), )
+    except ValueError:
+        angle_calculation_intervals += ((epsilon, math.pi/2 - epsilon), )
 
     # Function who's roots are the launch angles we want
-    def minimization_function(launch_angle):
-        get_full_path_ground_distance(launch_angle, *atmosphere_params) - path_ground_distance
+    def minimization_function(launch_angle: float) -> float:
+        return get_apogee_ground_distance(launch_angle, *atmosphere_params) * 2 - path_ground_distance
 
     # Get path angles
-    high_path_launch_angle, high_results = optimize.bisect(
-        minimization_function, angle_of_shortest_path, get_pedersen_angle(*atmosphere_params), full_output=True
-    )
-    low_path_launch_angle, low_results = optimize.bisect(
-        minimization_function, 0, angle_of_shortest_path, full_output=True
-    )
+    angles = ()
+    for interval in angle_calculation_intervals:
+        try:
+            new_angle, _ = optimize.bisect(
+                minimization_function, interval[0], interval[1],
+                full_output=True, disp=True
+            )
+        except ValueError:
+            raise ValueError("Error finding optimal path angle in "
+                             "interval ({}, {}), with minimizations ({}, {})"
+                             .format(*interval, *[minimization_function(i) for i in interval]))
+        new_angle_is_unique = True
+        for angle in angles:
+            if abs(angle - new_angle) < 1E-6:
+                new_angle_is_unique = False
 
-    # Showing convergence errors
-    if not low_results.converged:
-        raise RuntimeError("Low path launch angle calculation failed to "
-                           f"converge with reason:\n{low_results.flag}")
-    if not high_results.converged:
-        raise RuntimeError("High path launch angle calculation failed "
-                           f"to converge with reason:\n{high_results.flag}")
-
-    # Getting angles as tuple
-    if abs(high_path_launch_angle - low_path_launch_angle) < 1E-6:
-        angles = (high_path_launch_angle,)
-    else:
-        angles = (high_path_launch_angle, low_path_launch_angle)
+        if new_angle_is_unique:
+            angles += (new_angle, )
 
     paths = ()
-    distances = np.linspace(0, path_ground_distance, num=1 + (path_ground_distance//step_size_horizontal))
+    num = 1 + math.ceil(path_ground_distance/step_size_horizontal)
+    distances = np.linspace(0.0, path_ground_distance, num=num)
     for angle in angles:
-        # TODO: Fix this path calculation. We need to get ground distances, and combine with heights.
-        paths = paths + (get_qp_ground_distances(angle, distances, *atmosphere_params),)
+        full_vector = np.empty((distances.shape[0], 2))
+        full_vector[:, 0] = distances
+        full_vector[:, 1] = get_qp_heights(angle, distances, *atmosphere_params)
+        paths = paths + (full_vector,)
 
     # Checking that these paths match desired results
-    for path in paths:
-        if abs(path[-1, 0] - path_ground_distance) < 1E-2:
-            abs_error = path[-1, 0] - path_ground_distance
-            rel_error = (path[-1, 0] - path_ground_distance) * 2 / (path[-1, 0] + path_ground_distance)
-            raise RuntimeError("One path launch angle calculation failed "
-                               "to converge to the expected result.\n"
-                               f"Abs error: {abs_error}.  "
-                               f"Relative error: {rel_error}")
+    # for path in paths:
+    #     if abs(path[-1, 0] - path_ground_distance) < 1E-2:
+    #         abs_error = path[-1, 0] - path_ground_distance
+    #         rel_error = (path[-1, 0] - path_ground_distance) * 2 / (path[-1, 0] + path_ground_distance)
+    #         raise RuntimeError("One path launch angle calculation failed "
+    #                            "to converge to the expected result.\n"
+    #                            f"Abs error: {abs_error}.  "
+    #                            f"Relative error: {rel_error}")
 
     return paths

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from Vector import spherical_to_cartesian, cartesian_to_spherical, angle_between, unit_vector
-from Constants import EARTH_RADIUS
+from constants import EARTH_RADIUS
 from numpy import array, exp, linspace, zeros, cross, sign, repeat, square, maximum, sqrt
 from matplotlib import pyplot as plt
 from scipy.spatial.transform import Rotation

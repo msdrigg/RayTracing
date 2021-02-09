@@ -8,7 +8,7 @@ import Vector
 from scipy.interpolate import UnivariateSpline
 from scipy.spatial.transform import Rotation
 from scipy.optimize import fsolve
-from Constants import PI, EARTH_RADIUS, TYPE_ABBREVIATION
+from constants import PI, EARTH_RADIUS, TYPE_ABBREVIATION
 from matplotlib import pyplot as plt
 from os.path import join as join_path
 

@@ -1,10 +1,10 @@
-from Constants import EARTH_RADIUS
+from constants import EARTH_RADIUS
 from numpy import array, arange
 from math import atan
 from numpy.linalg import norm
 from matplotlib import pyplot as plt
 import Atmosphere
-import Constants as Const
+import constants as Const
 import Vector as Vec
 import Paths as Path
 import Tracer as Trace

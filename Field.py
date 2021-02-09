@@ -1,7 +1,7 @@
 from abc import abstractmethod, ABC
 
 from Vector import cartesian_to_spherical, unit_radius, unit_theta, unit_vector, spherical_to_cartesian
-from Constants import B_FIELD, EARTH_RADIUS, B_FACTOR
+from constants import B_FIELD, EARTH_RADIUS, B_FACTOR
 from numpy import power, cos, sin, sqrt, square, array, asarray, repeat
 
 
