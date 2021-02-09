@@ -61,28 +61,6 @@ def calculate_param_x_b(launch_angle: float, atmosphere_base_height: float) -> f
     return atmosphere_base_height ** 2 - (coords.EARTH_RADIUS * math.cos(launch_angle)) ** 2
 
 
-def calculate_e_density(heights: np.ndarray, *atmosphere_params: float) -> np.ndarray:
-    """
-    // NOTE: UNTESTED
-    Returns the e density as a numpy array for the given heights. Heights are measured from origin not surface
-    """
-    atmosphere_height_of_max, atmosphere_base_height, atmosphere_max_e_density, operating_frequency = atmosphere_params
-    semi_width = atmosphere_height_of_max - atmosphere_base_height
-
-    term_2_numerator = (heights - atmosphere_height_of_max) * atmosphere_base_height
-    term_2_denominator = semi_width * heights
-    term_2 = np.square(term_2_numerator / term_2_denominator)
-
-    in_atmosphere_density = atmosphere_max_e_density * (1 - term_2)
-
-    return np.where(
-        (atmosphere_base_height < heights) & (atmosphere_base_height * atmosphere_height_of_max /
-                                              (atmosphere_base_height - semi_width) > heights),
-        atmosphere_max_e_density * in_atmosphere_density,
-        0
-    )
-
-
 def ground_distance_derivative(
         launch_angle: float,
         *atmosphere_params):
@@ -96,7 +74,7 @@ def ground_distance_derivative(
 
     discriminant = b ** 2 - 4 * a * c
     x_b = calculate_param_x_b(launch_angle, atmosphere_base_height)
-    r_b2_minus_x_b = (coords.EARTH_RADIUS * math.cos(launch_angle) ) ** 2
+    r_b2_minus_x_b = (coords.EARTH_RADIUS * math.cos(launch_angle)) ** 2
 
     log_numerator = (2 * c + 2 * math.sqrt(c * x_b)) + b * atmosphere_base_height
     log_denominator = math.sqrt(discriminant) * atmosphere_base_height
@@ -111,7 +89,7 @@ def ground_distance_derivative(
     pos_term_1 = coords.EARTH_RADIUS * math.sin(launch_angle) / math.sqrt(x_b)
 
     pos_term_2_numerator = (2 * coords.EARTH_RADIUS * r_b2_minus_x_b *
-                             (c + x_b + 2 * sqrt_c_x_b) * math.sin(launch_angle))
+                            (c + x_b + 2 * sqrt_c_x_b) * math.sin(launch_angle))
     pos_term_2_denominator = math.sqrt(c) * (b * atmosphere_base_height * sqrt_c_x_b + 2 * c * (x_b + sqrt_c_x_b))
     pos_term_2 = pos_term_2_numerator / pos_term_2_denominator
 
@@ -159,20 +137,7 @@ def get_pedersen_angle(
     a = calculate_param_a(*atmosphere_params)
     b = calculate_param_b(*atmosphere_params)
     radical = -b * (atmosphere_height_of_max + b / (2 * a)) / 2
-    # import json
-    # print(json.dumps({
-    #     "a": a,
-    #     "b": b,
-    #     "c": c,
-    #     "xb": x_b,
-    #     "rb2minusxb": r_b2_minus_x_b,
-    #     "log_term": log_term,
-    #     "neg_term_2": neg_term_2,
-    #     "neg_term_3": neg_term_3,
-    #     "pos_term_1": pos_term_1,
-    #     "pos_term_2": pos_term_2,
-    #     "pos_term_3": pos_term_3
-    # }, indent=4))
+
     try:
         inside_term = math.sqrt(radical)/coords.EARTH_RADIUS
         return math.acos(inside_term)
@@ -434,13 +399,13 @@ def get_quasi_parabolic_path(
         paths = paths + (full_vector,)
 
     # Checking that these paths match desired results
-    # for path in paths:
-    #     if abs(path[-1, 0] - path_ground_distance) < 1E-2:
-    #         abs_error = path[-1, 0] - path_ground_distance
-    #         rel_error = (path[-1, 0] - path_ground_distance) * 2 / (path[-1, 0] + path_ground_distance)
-    #         raise RuntimeError("One path launch angle calculation failed "
-    #                            "to converge to the expected result.\n"
-    #                            f"Abs error: {abs_error}.  "
-    #                            f"Relative error: {rel_error}")
+    for path in paths:
+        if abs(path[-1, 0] - path_ground_distance) > 1E-2:
+            abs_error = path[-1, 0] - path_ground_distance
+            rel_error = (path[-1, 0] - path_ground_distance) * 2 / (path[-1, 0] + path_ground_distance)
+            raise RuntimeError("One path launch angle calculation failed "
+                               "to converge to the expected result.\n"
+                               f"Abs error: {abs_error}.  "
+                               f"Relative error: {rel_error}")
 
     return paths

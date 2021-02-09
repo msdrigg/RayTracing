@@ -8,12 +8,11 @@ from Paths import QuasiParabolic, GreatCircleDeviation
 from scipy.linalg import solve as sym_solve
 from scipy.integrate import simps
 # from scipy.optimize._minpack import _hybrj as hybrj
-import Vector
 from matplotlib import use as matplotlib_use
 # matplotlib_use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
-from constants import PI, EARTH_RADIUS
+from utils.constants import PI, EARTH_RADIUS
 import multiprocessing as mp
 # import numpy as np
 from os.path import join as join_path

@@ -418,7 +418,7 @@ class TestQuasiParabolicBaseParams(TestCase):
                         show=False,
                         max_height=max_height
                     )
-                
+
                 for expected, gotten in zip(expected_results, result_paths):
                     distances = list(expected.keys())
                     heights = [expected[key] for key in distances]
@@ -434,7 +434,8 @@ class TestQuasiParabolicBaseParams(TestCase):
                     )
                     if should_plot and fig is not None:
                         plotting.visualize_path(gotten, show=False, fig=fig, ax=ax, color='white')
-                        # plotting.visualize_path(expected_combined, show=True, fig=fig, ax=ax, color='black')
 
                 if should_plot:
                     plt.show()
+
+
