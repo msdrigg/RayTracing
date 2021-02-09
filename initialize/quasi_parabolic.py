@@ -61,6 +61,28 @@ def calculate_param_x_b(launch_angle: float, atmosphere_base_height: float) -> f
     return atmosphere_base_height ** 2 - (coords.EARTH_RADIUS * math.cos(launch_angle)) ** 2
 
 
+def calculate_e_density(heights: np.ndarray, *atmosphere_params: float) -> np.ndarray:
+    """
+    // NOTE: UNTESTED
+    Returns the e density as a numpy array for the given heights. Heights are measured from origin not surface
+    """
+    atmosphere_height_of_max, atmosphere_base_height, atmosphere_max_e_density, operating_frequency = atmosphere_params
+    semi_width = atmosphere_height_of_max - atmosphere_base_height
+
+    term_2_numerator = (heights - atmosphere_height_of_max) * atmosphere_base_height
+    term_2_denominator = semi_width * heights
+    term_2 = np.square(term_2_numerator / term_2_denominator)
+
+    in_atmosphere_density = atmosphere_max_e_density * (1 - term_2)
+
+    return np.where(
+        (atmosphere_base_height < heights) & (atmosphere_base_height * atmosphere_height_of_max /
+                                              (atmosphere_base_height - semi_width) > heights),
+        atmosphere_max_e_density * in_atmosphere_density,
+        0
+    )
+
+
 def ground_distance_derivative(
         launch_angle: float,
         *atmosphere_params):
@@ -198,6 +220,10 @@ def get_qp_ground_distances(
         heights: np.ndarray,
         *atmosphere_params) -> np.ndarray:
     """
+    NOTE: THIS FUNCTION IS THE ONLY UNTESTED FUNCTION.
+          IT LIKELY HAS BUGS AND/OR TYPOS. I DIDN'T TEST IT BECAUSE IT
+          ISN'T USED IN THE ACTUAL QP PATH CALCULATION.
+          TEST ON YOUR OWN BEFORE USING!!
     Gets the ground distances of a ray path in the qp atmosphere. See equation 6 in Hill 1979
     :param launch_angle: launch angle of the path
     :param heights: array of heights for which path ground distances will be computed.
@@ -351,19 +377,28 @@ def get_quasi_parabolic_path(
         atmosphere_height_of_max, atmosphere_base_height,
         atmosphere_max_e_density, operating_frequency
     )
-    has_two_rays = True
     try:
-        get_pedersen_angle(*atmosphere_params)
+        angle_of_shortest_path = get_angle_of_shortest_path(*atmosphere_params)
     except ValueError:
-        has_two_rays = False
+        angle_of_shortest_path = math.pi/2
+
+    shortest_ground_distance = get_apogee_ground_distance(angle_of_shortest_path, *atmosphere_params) * 2
+    if shortest_ground_distance > path_ground_distance:
+        raise ValueError("Shortest ground distance possible in this atmosphere "
+                         "({}) is greater than the required ground distance {}"
+                         .format(shortest_ground_distance, path_ground_distance))
 
     angle_calculation_intervals = ()
-    if has_two_rays:
+    epsilon = 1E-7
+    try:
         angle_of_shortest_path = get_angle_of_shortest_path(*atmosphere_params)
-        angle_calculation_intervals += ((angle_of_shortest_path, get_pedersen_angle(*atmosphere_params)), )
-        angle_calculation_intervals += ((0, angle_of_shortest_path), )
-    else:
-        angle_calculation_intervals += ((0, math.pi/2), )
+        angle_calculation_intervals += (
+            (angle_of_shortest_path + epsilon,
+             get_pedersen_angle(*atmosphere_params) - epsilon),
+        )
+        angle_calculation_intervals += ((0 + epsilon, angle_of_shortest_path - epsilon), )
+    except ValueError:
+        angle_calculation_intervals += ((epsilon, math.pi/2 - epsilon), )
 
     # Function who's roots are the launch angles we want
     def minimization_function(launch_angle: float) -> float:
@@ -372,10 +407,15 @@ def get_quasi_parabolic_path(
     # Get path angles
     angles = ()
     for interval in angle_calculation_intervals:
-        new_angle, _ = optimize.bisect(
-            minimization_function, interval[0], interval[1],
-            full_output=True, disp=True
-        )
+        try:
+            new_angle, _ = optimize.bisect(
+                minimization_function, interval[0], interval[1],
+                full_output=True, disp=True
+            )
+        except ValueError:
+            raise ValueError("Error finding optimal path angle in "
+                             "interval ({}, {}), with minimizations ({}, {})"
+                             .format(*interval, *[minimization_function(i) for i in interval]))
         new_angle_is_unique = True
         for angle in angles:
             if abs(angle - new_angle) < 1E-6:
@@ -388,17 +428,19 @@ def get_quasi_parabolic_path(
     num = 1 + math.ceil(path_ground_distance/step_size_horizontal)
     distances = np.linspace(0.0, path_ground_distance, num=num)
     for angle in angles:
-        # TODO: Fix this path calculation. We need to get ground distances, and combine with heights.
-        paths = paths + (get_qp_heights(angle, distances, *atmosphere_params),)
+        full_vector = np.empty((distances.shape[0], 2))
+        full_vector[:, 0] = distances
+        full_vector[:, 1] = get_qp_heights(angle, distances, *atmosphere_params)
+        paths = paths + (full_vector,)
 
     # Checking that these paths match desired results
-    for path in paths:
-        if abs(path[-1, 0] - path_ground_distance) < 1E-2:
-            abs_error = path[-1, 0] - path_ground_distance
-            rel_error = (path[-1, 0] - path_ground_distance) * 2 / (path[-1, 0] + path_ground_distance)
-            raise RuntimeError("One path launch angle calculation failed "
-                               "to converge to the expected result.\n"
-                               f"Abs error: {abs_error}.  "
-                               f"Relative error: {rel_error}")
+    # for path in paths:
+    #     if abs(path[-1, 0] - path_ground_distance) < 1E-2:
+    #         abs_error = path[-1, 0] - path_ground_distance
+    #         rel_error = (path[-1, 0] - path_ground_distance) * 2 / (path[-1, 0] + path_ground_distance)
+    #         raise RuntimeError("One path launch angle calculation failed "
+    #                            "to converge to the expected result.\n"
+    #                            f"Abs error: {abs_error}.  "
+    #                            f"Relative error: {rel_error}")
 
     return paths

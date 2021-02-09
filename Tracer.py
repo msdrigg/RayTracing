@@ -13,7 +13,7 @@ from matplotlib import use as matplotlib_use
 # matplotlib_use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
-from Constants import PI, EARTH_RADIUS
+from constants import PI, EARTH_RADIUS
 import multiprocessing as mp
 # import numpy as np
 from os.path import join as join_path

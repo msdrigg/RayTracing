@@ -1,6 +1,6 @@
 from numpy.linalg import norm
 from numpy import cos, arccos, sin, arctan2, vstack, clip, sum
-from Constants import PI
+from constants import PI
 
 
 def spherical_to_cartesian(spherical_vector):
