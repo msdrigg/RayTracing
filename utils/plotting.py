@@ -35,7 +35,7 @@ def visualize_path(path_components: np.ndarray,
     if ray_type is None:
         _label = f'{_frequency} MHz'
     else:
-        _label = f'{constants.TYPE_ABBREVIATION[ray_type]} - {_frequency} MHz'
+        _label = f'{ray_type} - {_frequency} MHz'
 
     heights = (path_components[:, 1]) / 1000
     distances = path_components[:, 0] / 1000
