@@ -418,9 +418,7 @@ class TestQuasiParabolicBaseParams(TestCase):
                         show=False,
                         max_height=max_height
                     )
-
-                    plotting.visualize_ground(result_paths[0][-1, 0] / coords.EARTH_RADIUS, color='black')
-
+                
                 for expected, gotten in zip(expected_results, result_paths):
                     distances = list(expected.keys())
                     heights = [expected[key] for key in distances]

@@ -110,7 +110,7 @@ def ground_distance_derivative(
 
     pos_term_1 = coords.EARTH_RADIUS * math.sin(launch_angle) / math.sqrt(x_b)
 
-    pos_term_2_numerator = ( 2 * coords.EARTH_RADIUS * r_b2_minus_x_b *
+    pos_term_2_numerator = (2 * coords.EARTH_RADIUS * r_b2_minus_x_b *
                              (c + x_b + 2 * sqrt_c_x_b) * math.sin(launch_angle))
     pos_term_2_denominator = math.sqrt(c) * (b * atmosphere_base_height * sqrt_c_x_b + 2 * c * (x_b + sqrt_c_x_b))
     pos_term_2 = pos_term_2_numerator / pos_term_2_denominator

@@ -64,7 +64,7 @@ def visualize_atmosphere(plasma_frequency_function: typing.Callable[[np.ndarray]
                          max_height: float = None,
                          **kwargs) -> typing.Optional[typing.Tuple[plt.Figure, plt.Axes]]:
     """
-    Plots the path provided
+    Plots the atmosphere given the model
     :param plasma_frequency_function:
         Function that maps a vector of spherical coordinates into an array of plasma frequencies
         The callable will be passed an array of size (N, 3) and must return an array of size (N,)
@@ -118,7 +118,3 @@ def visualize_atmosphere(plasma_frequency_function: typing.Callable[[np.ndarray]
         plt.show()
     else:
         return fig, ax
-
-
-def visualize_ground(total_angle, **kwargs):
-    return None
