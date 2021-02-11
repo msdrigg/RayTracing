@@ -1,3 +1,11 @@
+"""
+This file holds equations that come primarily from the
+1979 Jay Roderick Hill paper on ray tracing in the
+Quasi-Parabolic atmosphere. There is also some work from
+the 1968 Croft and Hoogasian paper on the same topic.
+I will cite each equation as it comes from that paper.
+"""
+
 import numpy as np
 from scipy import optimize
 from utils import coordinates as coords
@@ -66,6 +74,8 @@ def ground_distance_derivative(
         *atmosphere_params):
     """
     Calculates the derivative of ground distance with respect to launch angle
+    This is my own work, and is derived using mathematica
+    See equation 6 in Hill 1979
     """
     atmosphere_base_height = atmosphere_params[1]
     a = calculate_param_a(*atmosphere_params)
@@ -102,7 +112,8 @@ def ground_distance_derivative(
 def get_angle_of_shortest_path(*atmosphere_params) -> float:
     """
     Calculates the angle that minimizes ground distance
-    :return: The angle of launch (beta_0) that yields the shortest QP path
+    :return: The angle of launch (beta_0) that yields the
+    shortest QP path
     """
     try:
         pedersen_angle = get_pedersen_angle(*atmosphere_params)
@@ -122,7 +133,8 @@ def get_pedersen_angle(
         atmosphere_max_e_density: float,
         operating_frequency: float) -> float:
     """
-    Calculates the pedersen angle for the atmosphere. See Equation 10 in Hill 1979
+    Calculates the pedersen angle for the atmosphere.
+    See Equation 10 in Hill 1979
     :param atmosphere_max_e_density: see get_quasi_parabolic_path
     :param atmosphere_base_height: see get_quasi_parabolic_path
     :param atmosphere_height_of_max: see get_quasi_parabolic_path
@@ -189,7 +201,8 @@ def get_qp_ground_distances(
           IT LIKELY HAS BUGS AND/OR TYPOS. I DIDN'T TEST IT BECAUSE IT
           ISN'T USED IN THE ACTUAL QP PATH CALCULATION.
           TEST ON YOUR OWN BEFORE USING!!
-    Gets the ground distances of a ray path in the qp atmosphere. See equation 6 in Hill 1979
+    Gets the ground distances of a ray path in the qp atmosphere.
+    See equation 6 in Hill 1979
     :param launch_angle: launch angle of the path
     :param heights: array of heights for which path ground distances will be computed.
     :param atmosphere_params: parameters describing the atmosphere. See get_quasi_parabolic_path
@@ -324,7 +337,7 @@ def get_quasi_parabolic_path(
         step_size_horizontal: float = 5) -> np.ndarray:
     """
     This is the primary function to generate the
-    points along a path in a quasiparabolic atmosphere
+    points along a path in a quasi-parabolic atmosphere
     :param path_ground_distance: The length of the path along the earths surface (in meters)
     :param atmosphere_height_of_max: The point where the atmosphere is at its max density (r_m)
     :param atmosphere_base_height: The base of the atmosphere (r_b)
@@ -379,7 +392,8 @@ def get_quasi_parabolic_path(
             )
         except ValueError:
             raise ValueError("Error finding optimal path angle in "
-                             "interval ({}, {}), with minimizations ({}, {})"
+                             "interval (a, b) = ({}, {}), "
+                             "with (f(a), f(b)) = ({}, {})"
                              .format(*interval, *[minimization_function(i) for i in interval]))
         new_angle_is_unique = True
         for angle in angles:

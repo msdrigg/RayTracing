@@ -3,7 +3,9 @@ import numpy as np
 from utils import coordinates as coords
 import typing
 import math
-import constants
+
+# This import registers the 3D projection, but is otherwise unused.
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
 
 
 def visualize_path(path_components: np.ndarray,
@@ -118,3 +120,99 @@ def visualize_atmosphere(plasma_frequency_function: typing.Callable[[np.ndarray]
         plt.show()
     else:
         return fig, ax
+
+
+def visualize_trace(
+        calculated_paths: typing.Tuple[np.ndarray],
+        fig: plt.Figure = None,
+        ax: plt.Axes = None,
+        plot_all_traces: bool = False,
+        show: bool = True, **kwargs):
+    """
+    Plots the atmosphere given the model
+    :param calculated_paths: A tuple of paths to plot.
+    Each element in tuple is an iteration of the trace
+    These need to be ordered by earliest iteration to newest
+    :param fig: Existing pyplot figure to append new graph onto
+    :param ax: Existing pyplot axes to append new graph onto
+    :param plot_all_traces: If false, only plot the newest iteration.
+        Otherwise plot them all.
+    :param show: Whether or not to show the graph. If not return the fig/axes plotted onto
+    :param kwargs: Additional arguments are passed to ax.plot
+    :returns: If show is True, it returns the figure and axes. Otherwise it will return nothing.
+    """
+    if ax is None or fig is None:
+        fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
+
+    ax.set_title(f"3D Ray Trace")
+    ax.autoscale(False)
+    if plot_all_traces and len(calculated_paths) > 1:
+        custom_lines = [plt.Line2D([0], [0], color='black', lw=4),
+                        plt.Line2D([0], [0], color='white', lw=4)]
+        ax.legend(custom_lines, ['Best Trace', 'Earlier Traces'])
+    else:
+        custom_lines = [plt.Line2D([0], [0], color='black', lw=4)]
+        ax.legend(custom_lines, ['Best Trace'])
+
+    # Plot the initial calculated paths if desired
+    if plot_all_traces:
+        for i in range(len(calculated_paths) - 1):
+            path = calculated_paths[i]
+            radii = path.radial_points[:, 1]
+            radii = (radii - coords.EARTH_RADIUS)/1000
+            km_range = path.radial_points[:, 0] * \
+                path.total_angle * coords.EARTH_RADIUS / 1000
+            ax.plot(km_range, radii, color='white', **kwargs)
+
+    # We always plot the last ones
+    path = calculated_paths[-1]
+    radii = path.radial_points[:, 1]
+    radii = (radii - coords.EARTH_RADIUS)/1000
+    km_range = path.radial_points[:, 0] * path.total_angle * \
+        coords.EARTH_RADIUS / 1000
+    ax.plot(km_range, radii, color='black')
+    ax.set_ylabel("Altitude (km)")
+    ax.set_xlabel("Range (km)")
+
+    if show:
+        plt.show()
+        plt.close(fig)
+    else:
+        return fig, ax
+
+
+def visualize_points(points: dict, fig=None, ax=None, show=True):
+    """
+    Plots the points in 3d space. All points need to be cartesian
+    points: a dictionary of {label: point}
+    """
+    if ax is None or fig is None:
+        fig = plt.figure(figsize=plt.figaspect(0.5) * 1.5)
+        ax = fig.add_subplot(111, projection='3d')
+
+    def axis_equal3d(old_ax):
+        extents = np.array([getattr(old_ax, 'get_{}lim'.format(dim))() for dim in 'xyz'])
+        sz = extents[:, 1] - extents[:, 0]
+        centers = np.mean(extents, axis=1)
+        maxsize = max(abs(sz))
+        r = maxsize / 2
+        for ctr, dim in zip(centers, 'xyz'):
+            getattr(old_ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
+
+    print(points)
+    for label in points.keys():
+        point = points[label]
+        ax.scatter(*point.tolist())
+        ax.text(*point.tolist(), label)
+
+    u, v = np.mgrid[0:2 * np.pi:60j, 0:np.pi:30j]
+    x = np.cos(u) * np.sin(v) * coords.EARTH_RADIUS
+    y = np.sin(u) * np.sin(v) * coords.EARTH_RADIUS
+    z = np.cos(v) * coords.EARTH_RADIUS
+    ax.plot_wireframe(x, y, z, color="r")
+    axis_equal3d(old_ax=ax)
+
+    if show:
+        plt.show()
+    return fig, ax
+
