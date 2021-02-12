@@ -69,26 +69,32 @@ def cartesian_to_spherical(cartesian):
 
 # Converts a spherical coordinate to a coordinate in the form of
 # (radius, 'distance in radians along path', 'normal distance in radians to path')
-def spherical_to_path_component(
-        spherical: np.ndarray,
-        path_start: np.ndarray,
-        path_end: np.ndarray) -> np.ndarray:
+def standard_to_path_component(
+        standard: np.ndarray,
+        path_start_spherical: np.ndarray,
+        path_end_spherical: np.ndarray,
+        from_spherical: bool = True) -> np.ndarray:
     """
     Converts coordinates to path component form (distance along path (along earths surface),
         distance normal to path (along earths surface), height (above earths surface))
-    :param spherical: the coordinate or array of coordinates to rotate (in spherical form)
-    :param path_start: the coordinate of path start (spherical coordinates)
-    :param path_end: the coordinate of the path end (spherical coordinates)
+    :param standard: the coordinate or array of coordinates to rotate (in some standard form)
+    :param path_start_spherical: the coordinate of path start (spherical coordinates)
+    :param path_end_spherical: the coordinate of the path end (spherical coordinates)
+    :param from_spherical: if true, assume components are spherical, else they are cartesian
     :return: coordinate or array of coordinates in path component form
     """
-    spherical_vector = np.atleast_2d(spherical)
-    cartesian_components = np.atleast_2d(spherical_to_cartesian(spherical_vector))
+    if from_spherical:
+        spherical_vector = np.atleast_2d(standard)
+        cartesian_components = np.atleast_2d(spherical_to_cartesian(spherical_vector))
+    else:
+        cartesian_components = standard
+        spherical_vector = np.empty(1)
 
     # Path start and end
-    cartesian_start = spherical_to_cartesian(path_start)
-    cartesian_end = spherical_to_cartesian(path_end)
+    cartesian_start = spherical_to_cartesian(path_start_spherical)
+    cartesian_end = spherical_to_cartesian(path_end_spherical)
 
-    path_components = np.empty_like(spherical_vector, dtype=float)
+    path_components = np.empty_like(cartesian_components, dtype=float)
 
     normal_vec_to_plane = np.cross(cartesian_start, cartesian_end)
     unit_normal_vec = normal_vec_to_plane / linalg.norm(normal_vec_to_plane)
@@ -111,27 +117,32 @@ def spherical_to_path_component(
         cartesian_components
     ) * EARTH_RADIUS * np.sign(vector_normal_component)
 
-    path_components[:, 0] = spherical_vector[:, 0] - EARTH_RADIUS
+    if from_spherical:
+        path_components[:, 0] = spherical_vector[:, 0] - EARTH_RADIUS
+    else:
+        path_components[:, 0] = linalg.norm(cartesian_components) - EARTH_RADIUS
 
     return vector.flatten_if_necessary(path_components)
 
 
-def path_component_to_spherical(
+def path_component_to_standard(
         path_components: np.ndarray,
-        path_start: np.ndarray,
-        path_end: np.ndarray) -> np.ndarray:
+        path_start_spherical: np.ndarray,
+        path_end_spherical: np.ndarray,
+        to_spherical: bool = True) -> np.ndarray:
     """
     NOTE: path_start and path_end cannot be at opposite poles
         (obviously, because then path between them is arbitrary)
     :param path_components: the coordinate or array of coordinates to rotate (in path component form)
-    :param path_start: the coordinate of path start (spherical coordinates)
-    :param path_end: the coordinate of the path end (spherical coordinates)
+    :param path_start_spherical: the coordinate of path start (spherical coordinates)
+    :param path_end_spherical: the coordinate of the path end (spherical coordinates)
+    :param to_spherical: if true, return spherical, else return cartesian
     :return: coordinate or array of coordinates in spherical coordinates
     """
     path_components_vector = np.atleast_2d(path_components)
 
-    cartesian_start = spherical_to_cartesian(path_start)
-    cartesian_end = spherical_to_cartesian(path_end)
+    cartesian_start = spherical_to_cartesian(path_start_spherical)
+    cartesian_end = spherical_to_cartesian(path_end_spherical)
 
     normal_vector_to_path = np.cross(cartesian_start, cartesian_end)
     unit_normal_vector_to_path = normal_vector_to_path / linalg.norm(normal_vector_to_path)
@@ -157,6 +168,10 @@ def path_component_to_spherical(
     )
 
     cartesian_components = perpendicular_rotations.apply(vecs_along_path)
+
+    if not to_spherical:
+        return cartesian_components
+
     spherical_components = np.atleast_2d(cartesian_to_spherical(cartesian_components))
 
     spherical_components[:, 0] = path_components_vector[:, 0] + EARTH_RADIUS

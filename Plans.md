@@ -1,6 +1,18 @@
 # Future Changes
 Outline of future changes.
 This will serve as a checklist for the project
+# Ongoing
+1. Finish implementing current efforts
+    1. paths.generate_cartesian_callable
+    2. tracing.integrate_over_path
+    3. tracing main function for quick testing
+    4. tracing.trace generate the path_components evenly spaced
+    5. magnetic.dipole
+    6. magnetic.zero (make sure it uses cartesian and r_norm)
+    7. All callable's -- make sure they accept and use r_norm
+2. Test current algorithms
+    1. Test new plotting features
+    2. Test tracer
 ## Testing
 1. Retest the core functionality around the zero-field implementation
     1. Test solving perturbations of 

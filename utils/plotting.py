@@ -89,7 +89,7 @@ def visualize_atmosphere(plasma_frequency_function: typing.Callable[[np.ndarray]
     path_component_vector[:, 1] = np.linspace(0, 1, point_number) * total_angle * coords.EARTH_RADIUS
     path_component_vector[:, 2] = 0
 
-    points = coords.path_component_to_spherical(path_component_vector, initial_point, final_point)
+    points = coords.path_component_to_standard(path_component_vector, initial_point, final_point)
 
     if max_height is None:
         if ax is not None:
@@ -123,7 +123,7 @@ def visualize_atmosphere(plasma_frequency_function: typing.Callable[[np.ndarray]
 
 
 def visualize_trace(
-        calculated_paths: typing.Tuple[np.ndarray],
+        calculated_paths: typing.Sequence[np.ndarray],
         fig: plt.Figure = None,
         ax: plt.Axes = None,
         plot_all_traces: bool = False,
@@ -158,18 +158,16 @@ def visualize_trace(
     if plot_all_traces:
         for i in range(len(calculated_paths) - 1):
             path = calculated_paths[i]
-            radii = path.radial_points[:, 1]
+            radii = path[:, 0]
             radii = (radii - coords.EARTH_RADIUS)/1000
-            km_range = path.radial_points[:, 0] * \
-                path.total_angle * coords.EARTH_RADIUS / 1000
+            km_range = radii * (path[0, 1] - path[-1, 1]) / 1000
             ax.plot(km_range, radii, color='white', **kwargs)
 
     # We always plot the last ones
     path = calculated_paths[-1]
-    radii = path.radial_points[:, 1]
+    radii = path[:, 0]
     radii = (radii - coords.EARTH_RADIUS)/1000
-    km_range = path.radial_points[:, 0] * path.total_angle * \
-        coords.EARTH_RADIUS / 1000
+    km_range = radii * (path[0, 1] - path[-1, 1]) / 1000
     ax.plot(km_range, radii, color='black')
     ax.set_ylabel("Altitude (km)")
     ax.set_xlabel("Range (km)")
@@ -215,4 +213,3 @@ def visualize_points(points: dict, fig=None, ax=None, show=True):
     if show:
         plt.show()
     return fig, ax
-

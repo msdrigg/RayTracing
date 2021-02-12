@@ -2,108 +2,66 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy import linalg, integrate, interpolate, optimize
 import os
-from utils import vector, plotting, constants, equations, coordinates as coords
+from utils import vector, plotting, path, constants, equations, coordinates as coords
 import multiprocessing as mp
 import typing
 import math
 import warnings
 
 
-def off_diagonal_dirs(index_pair, curr_path, integration_step_number, gradient_step_size):
-    """
-    Calculates the off-diagonal derivatives for calculating the hessian of P
-    These calculations appear in Equation 19 of Coleman 2011
-    :param index_pair: The second derivative is calculated with respect to this pair of parameters
-    :param curr_path: The current state of the path (The evaluation point of the derivative)
-    :param integration_step_number: The integration step size
-    :param gradient_step_size: The amount to vary the parameter in the calculation of the derivative
-    :return: The mixed second derivative of the functional P with respect to the parameters in index_pair
-    """
-
-    # We know for a cubic spline, the derivative wrt parameter i within the integral only affects the spline
-    # in the interval (i - 2, i + 2) and for a quartic (i - 3, i + 3), so we consider
-    # two derivatives cannot affect each other if these intervals do not overlap.
-    if abs(index_pair[0] - index_pair[1]) > 9:
-        return np.array([*index_pair, 0])
-
-    path_mm = curr_path.copy()
-    path_mm[index_pair] -= gradient_step_size
-    p_mm = integrate_parameter(path_mm, step_number=integration_step_number)
-    path_mp = curr_path.copy()
-    path_mp[index_pair] += [-gradient_step_size, gradient_step_size]
-    p_mp = integrate_parameter(path_mp, step_number=integration_step_number)
-    path_pm = curr_path.copy()
-    path_pm[index_pair] += [gradient_step_size, -gradient_step_size]
-    p_pm = integrate_parameter(path_pm, step_number=integration_step_number)
-    path_pp = curr_path.copy()
-    path_pp[index_pair] += gradient_step_size
-    p_pp = integrate_parameter(path_pp, step_number=integration_step_number)
-    output = (p_pp - p_pm - p_mp + p_mm) / (4 * gradient_step_size ** 2)
-
-    return np.array([*index_pair, output])
-
-
-def calculate_diagonal_derivatives(varied_parameter, curr_path, integration_step_number, gradient_step_size):
-    """
-    Calculate the second derivative and the gradient vector.
-    These calculations involve the same function calls
-    The gradient is an implementation of Equation 18 in Coleman 2011, and the second derivative
-    appears in Equation 19 of the same paper
-    :param varied_parameter: The gradient is calculated with respect to this parameter
-    :param curr_path: The current state of the path (The evaluation point of the derivative)
-    :param integration_step_number: The integration step size
-    :param gradient_step_size: The amount to vary the parameter in the calculation of the derivative
-    :return: The first and second derivative of the functional P with respect to the parameter
-    """
-    path_minus = curr_path.copy()
-    path_minus[varied_parameter] -= gradient_step_size
-    path_plus = curr_path.copy()
-    path_plus[varied_parameter] += gradient_step_size
-    p_minus = integrate_parameter(path_minus, step_number=integration_step_number)
-    p_plus = integrate_parameter(path_plus, step_number=integration_step_number)
-    p_0 = integrate_parameter(curr_path, step_number=integration_step_number)
-    dpdx = (p_plus - p_minus) / (2 * gradient_step_size)
-    d2pdx2 = (p_plus + p_minus - 2 * p_0) / (gradient_step_size ** 2)
-    return np.array([varied_parameter, dpdx, d2pdx2])
-
-
-def integrate_parameter(
-        path_callable: interpolate.InterpolatedUnivariateSpline,
-        step_number: float = 2 ** 12 + 1,
+def integrate_over_path(
+        cartesian_coordinate_callable: typing.Callable,
+        gyro_frequency_callable: typing.Callable,
+        magnetic_field_vec_callable: typing.Callable,
+        plasma_frequency_callable: typing.Callable,
+        integration_step_number: int = 2 ** 12 + 1,
         show: bool = False,
         save: bool = False,
         debug_zero_field: bool = False):
     """
     Calculate P defined in Coleman as the integral of mu * pt over the path length
     See Section 3.1 for this definition.
-    :param path_callable: The path over which to integrate
-    :param step_number: The number of steps to use in integration
+    :param cartesian_coordinate_callable: A callable that takes values between 0 and 1 and
+    returns the cartesian components of the path
+    :param gyro_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the gyro frequency
+    :param magnetic_field_vec_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the magnetic field vec
+    :param plasma_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the plasma frequency
+    :param integration_step_number: The number of steps to use in integration
     :param show: Whether or not to display the path as a graph (debug only)
     :param save: Whether or not to save the plot (debug only)
     :param debug_zero_field: Whether or not to use the 0 field (debug only)
     :return: The integral of mu * pt over the path length (this is defined as P in Coleman 2011)
     """
-    r = path_callable(np.linspace(0, 1, step_number), nu=0)
-    r_dot = path_callable(np.linspace(0, 1, step_number), nu=1)
-    t = r_dot / linalg.norm(r_dot)
-    y2 = np.square(field.gyro_frequency(r) / frequency)
-    y_vec = field.field_vec(r) * field.gyro_frequency(r).reshape(-1, 1) / frequency
-    x = np.square(atmosphere.plasma_frequency(r) / frequency)
+    r = cartesian_coordinate_callable(np.linspace(0, 1, integration_step_number), nu=0)
+    r_norm = linalg.norm(r, axis=1)
+    r_dot = cartesian_coordinate_callable(np.linspace(0, 1, integration_step_number), nu=1)
+    r_dot_norm = linalg.norm(r_dot, axis=1)
+
+    t = r_dot / r_dot_norm
+    gyro_frequency_array = gyro_frequency_callable(r, r_norm)
+    y2 = np.square(gyro_frequency_array / frequency)
+    y_vec = magnetic_field_vec_callable(r, r_norm) * gyro_frequency_array / frequency
+    x = np.square(plasma_frequency_callable(r, r_norm) / frequency)
     yt = vector.row_dot_product(y_vec, t)
 
     # solved_yp_old = np.zeros(step_number)
     max_fev = 200
-    solved_yp = np.zeros(step_number)
+    solved_yp = np.zeros(integration_step_number)
+
     # TODO: Disable zero field in this case
-    for n in range(step_number):
+    for n in range(integration_step_number):
         if debug_zero_field:
             solved_yp[n] = 0
         else:
             # TODO: Profile different solvers here. Maybe call CPP function here
-            args_fsolve = x[n], y2[n], yt[n]
+            function_args = x[n], y2[n], yt[n]
             y_norm = math.sqrt(y2)
             result, details = optimize.toms748(
-                equations.equation_13, -y_norm, y_norm, args_fsolve, xtol=1E-15, rtol=1E-15, full_output=True
+                equations.equation_13, -y_norm, y_norm,
+                function_args, xtol=1E-15, rtol=1E-15, full_output=True
             )
             if not details.converged:
                 warnings.warn(
@@ -116,7 +74,7 @@ def integrate_parameter(
     solved_yp2 = np.square(solved_yp)
     # fractions = equation_16(solved_yp, solved_yp2, x, y2)
     # current_pt = equation_14(solved_yp, solved_yp2, y2, fractions, yt)
-    current_pt = np.repeat(1, step_number)
+    current_pt = np.repeat(1, integration_step_number)
     solved_yp[current_pt < 0] = -solved_yp[current_pt < 0]
     current_pt = np.absolute(current_pt)
     current_mu2 = equations.equation_15(solved_yp, x, y2)
@@ -149,8 +107,8 @@ def integrate_parameter(
     # plt.show()
     # print(f"Total r-dot: {array([rx, ry, rz])}.")
     # print(f"Total change: {fp - ip}")
-    dp_array = np.sqrt(current_mu2) * current_pt * linalg.linalg.norm(r_dot, axis=1)
-    integration = integrate.simps(dp_array, dx=step_size)
+    dp_array = np.sqrt(current_mu2) * current_pt * r_dot_norm
+    integration = integrate.romb(dp_array, 1 / integration_step_number)
     if show:
         fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
         ax.plot(dp_array)
@@ -162,76 +120,203 @@ def integrate_parameter(
     return integration
 
 
-def newton_raphson_step(
-        current_path_parameters: np.ndarray,
-        variable_indices: np.ndarray = np.array([1, -1]),
-        step_size=1000,
-        pool: mp.Pool = None):
+def calculate_off_diagonal_dirs(
+        index_pair: typing.Tuple[int],
+        curr_path: np.ndarray,
+        start_point_spherical: np.ndarray,
+        end_point_spherical: np.ndarray,
+        integration_step_number: int,
+        gradient_step_size: float,
+        gyro_frequency_callable: typing.Callable,
+        magnetic_field_vec_callable: typing.Callable,
+        plasma_frequency_callable: typing.Callable):
     """
-    Perform a newton raphson step as defined in Equation 19 of Coleman 2011. Thi
-    See Section 3.1 for this definition.
-    :param current_path_parameters: The current path parameters (alpha_i) before the newton raphson step
-    :param variable_indices: Array of indices for which we should NOT change or calculate change
-    (usually first and last)
-    :param step_size: The step size in meters over which to calculate the gradient
-    :param pool: The processor pool to calculate the derivatives with.
-    :return: A tuple of (The hessian due to the The next path after the iteration)
+    Calculates the off-diagonal derivatives for calculating the hessian of P
+    These calculations appear in Equation 19 of Coleman 2011
+    :param index_pair: The second derivative is calculated with respect to this pair of parameters
+    :param curr_path: The current state of the path (The evaluation point of the derivative)
+    :param start_point_spherical: The path start point in spherical coordinates
+    :param end_point_spherical: The path end point in spherical coordinates
+    :param integration_step_number: The integration step size
+    :param gradient_step_size: The amount to vary the parameter in the calculation of the derivative
+    :param gyro_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the gyro frequency
+    :param magnetic_field_vec_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the magnetic field vec
+    :param plasma_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the plasma frequency
+    :return: The mixed second derivative of the functional P with respect to the parameters in index_pair
     """
-    incomplete_hessian, incomplete_gradient = calculate_derivatives(
-        current_path_parameters,
-        variable_indices=variable_indices,
-        derivative_step_size=step_size,
-        pool=pool
+
+    # We know for a cubic spline, the derivative wrt parameter i within the integral only affects the spline
+    # in the interval (i - 2, i + 2) and for a quartic (i - 3, i + 3), so we consider
+    # two derivatives cannot affect each other if these intervals do not overlap.
+    if abs(index_pair[0] - index_pair[1]) > 9:
+        return np.array([*index_pair, 0])
+
+    path_mm_array = curr_path.copy()
+    path_mm_array[index_pair] -= gradient_step_size
+    path_mm_callable = path.generate_cartesian_callable(path_mm_array, start_point_spherical, end_point_spherical)
+    p_mm = integrate_over_path(
+        path_mm_callable,
+        gyro_frequency_callable,
+        magnetic_field_vec_callable,
+        plasma_frequency_callable,
+        integration_step_number=integration_step_number
+    )
+    path_mp_array = curr_path.copy()
+    path_mp_array[index_pair] += [-gradient_step_size, gradient_step_size]
+    path_mp_callable = path.generate_cartesian_callable(path_mp_array, start_point_spherical, end_point_spherical)
+    p_mp = integrate_over_path(
+        path_mp_callable,
+        gyro_frequency_callable,
+        magnetic_field_vec_callable,
+        plasma_frequency_callable,
+        integration_step_number=integration_step_number
+    )
+    path_pm_array = curr_path.copy()
+    path_pm_array[index_pair] += [gradient_step_size, -gradient_step_size]
+    path_pm_callable = path.generate_cartesian_callable(path_pm_array, start_point_spherical, end_point_spherical)
+    p_pm = integrate_over_path(
+        path_pm_callable,
+        gyro_frequency_callable,
+        magnetic_field_vec_callable,
+        plasma_frequency_callable,
+        integration_step_number=integration_step_number
+    )
+    path_pp_array = curr_path.copy()
+    path_pp_array[index_pair] += gradient_step_size
+    path_pp_callable = path.generate_cartesian_callable(path_pp_array, start_point_spherical, end_point_spherical)
+    p_pp = integrate_over_path(
+        path_pp_callable,
+        gyro_frequency_callable,
+        magnetic_field_vec_callable,
+        plasma_frequency_callable,
+        integration_step_number=integration_step_number
+    )
+    output = (p_pp - p_pm - p_mp + p_mm) / (4 * gradient_step_size ** 2)
+
+    return np.array([*index_pair, output])
+
+
+def calculate_diagonal_derivatives(
+        varied_parameter: int,
+        curr_path: np.ndarray,
+        start_point_spherical: np.ndarray,
+        end_point_spherical: np.ndarray,
+        integration_step_number: int,
+        gradient_step_size: float,
+        gyro_frequency_callable: typing.Callable,
+        magnetic_field_vec_callable: typing.Callable,
+        plasma_frequency_callable: typing.Callable):
+    """
+    Calculate the second derivative and the gradient vector.
+    These calculations involve the same function calls
+    The gradient is an implementation of Equation 18 in Coleman 2011, and the second derivative
+    appears in Equation 19 of the same paper
+    :param varied_parameter: The gradient is calculated with respect to this parameter
+    :param curr_path: The current state of the path (The evaluation point of the derivative)
+    :param start_point_spherical: The path start point in spherical coordinates
+    :param end_point_spherical: The path end point in spherical coordinates
+    :param integration_step_number: The integration step size
+    :param gradient_step_size: The amount to vary the parameter in the calculation of the derivative
+    :param gyro_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the gyro frequency
+    :param magnetic_field_vec_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the magnetic field vec
+    :param plasma_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the plasma frequency
+    :return: The first and second derivative of the functional P with respect to the parameter
+    """
+    path_minus = curr_path.copy()
+    path_minus[varied_parameter] -= gradient_step_size
+    path_minus_callable = path.generate_cartesian_callable(path_minus, start_point_spherical, end_point_spherical)
+
+    path_plus = curr_path.copy()
+    path_plus[varied_parameter] += gradient_step_size
+    path_plus_callable = path.generate_cartesian_callable(path_plus, start_point_spherical, end_point_spherical)
+
+    path_current_callable = path.generate_cartesian_callable(curr_path, start_point_spherical, end_point_spherical)
+
+    p_minus = integrate_over_path(
+        path_minus_callable,
+        gyro_frequency_callable,
+        magnetic_field_vec_callable,
+        plasma_frequency_callable,
+        integration_step_number=integration_step_number
+    )
+    p_plus = integrate_over_path(
+        path_plus_callable,
+        gyro_frequency_callable,
+        magnetic_field_vec_callable,
+        plasma_frequency_callable,
+        integration_step_number=integration_step_number
+    )
+    p_0 = integrate_over_path(
+        path_current_callable,
+        gyro_frequency_callable,
+        magnetic_field_vec_callable,
+        plasma_frequency_callable,
+        integration_step_number=integration_step_number
     )
 
-    inverse_matrix = linalg.pinvh(incomplete_hessian)
-    incomplete_change = np.matmul(inverse_matrix, incomplete_gradient)
-
-    change = np.zeros_like(current_path_parameters)
-    change[variable_indices] = incomplete_change
-
-    change_mag = linalg.norm(change)
-
-    print(f"Change magnitude: {change_mag}")
-
-    return incomplete_hessian, incomplete_gradient, change
+    dpdx = (p_plus - p_minus) / (2 * gradient_step_size)
+    d2pdx2 = (p_plus + p_minus - 2 * p_0) / (gradient_step_size ** 2)
+    return np.array([varied_parameter, dpdx, d2pdx2])
 
 
 def calculate_derivatives(
         current_path_parameters: np.ndarray,
+        start_point_spherical: np.ndarray,
+        end_point_spherical: np.ndarray,
+        gyro_frequency_callable: typing.Callable,
+        magnetic_field_vec_callable: typing.Callable,
+        plasma_frequency_callable: typing.Callable,
         variable_indices: np.ndarray = np.array([]),
         derivative_step_size: float = 1000,
-        integration_point_count: int = None,
+        integration_step_number: int = None,
         pool: mp.Pool = None):
     """
     Perform a newton raphson step as defined in Equation 19 of Coleman 2011. Thi
     See Section 3.1 for this definition.
     :param current_path_parameters: The current path parameters
+    :param start_point_spherical: The path start point in spherical coordinates
+    :param end_point_spherical: The path end point in spherical coordinates
+    :param gyro_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the gyro frequency
+    :param magnetic_field_vec_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the magnetic field vec
+    :param plasma_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the plasma frequency
     :param variable_indices: Array of indices for which we should NOT calculate derivatives
     :param derivative_step_size: The step size in meters over which to calculate the gradient
-    :param integration_point_count: The number of points to use in integrating over the path.
+    :param integration_step_number: The number of points to use in integrating over the path.
     We use romberg integration, so we must have integration_point_count be of the form 2 ^ n + 1
     :param pool: The processor pool to calculate the derivatives with. If none, create one
     :return: A tuple of (The hessian due to the The next path after the iteration)
     """
     # We need to make sure our integration step size is significantly smaller than our derivative
     #   or else our truncation error will be too large
-    INTEGRATION_STEP_SIZE_FACTOR = 1E4
 
-    if integration_point_count is None:
-        # TODO: Calculate total ground distance somehow
-        integration_rough_estimate = total_ground_distance / derivative_step_size * INTEGRATION_STEP_SIZE_FACTOR
+    total_ground_distance = math.asin(linalg.norm(np.cross(
+        coords.spherical_to_cartesian(start_point_spherical),
+        coords.spherical_to_cartesian(end_point_spherical)
+    )))
+
+    if integration_step_number is None:
+        integration_rough_estimate = \
+            total_ground_distance / derivative_step_size * constants.INTEGRATION_STEP_SIZE_FACTOR
         approximate_power = math.ceil(math.log(integration_rough_estimate - 1, 2))
-        integration_point_count = 2 ** approximate_power + 1
+        integration_step_number = 2 ** approximate_power + 1
     else:
-        approximate_power = round(math.log(integration_point_count - 1, 2))
+        approximate_power = round(math.log(integration_step_number - 1, 2))
         approximate_point_count = 2 ** approximate_power + 1
-        if approximate_point_count != integration_point_count:
+        if approximate_point_count != integration_step_number:
             warnings.warn("integration_point_count must be 2^n + 1 for rompberg integration"
                           "the nearest power of 2 is {}, "
                           "while the entered value is {}. Rounding to make it work"
-                          .format(approximate_point_count, integration_point_count), RuntimeWarning)
-            integration_point_count = approximate_point_count
+                          .format(approximate_point_count, integration_step_number), RuntimeWarning)
+            integration_step_number = approximate_point_count
 
     parameter_number = variable_indices.size
 
@@ -262,13 +347,18 @@ def calculate_derivatives(
     print(f"Expecting {total_ints} diagonal integrations")
 
     # Parallelize calculation of directional diagonal derivatives
-    diagonal_d_results = usable_pool.map(
+    diagonal_d_results = usable_pool.starmap(
         calculate_diagonal_derivatives,
         zip(
             variable_indices,
+            [start_point_spherical] * parameter_number,
+            [end_point_spherical] * parameter_number,
             [current_path_parameters] * parameter_number,
-            [integration_point_count] * parameter_number,
+            [integration_step_number] * parameter_number,
             [derivative_step_size] * parameter_number,
+            [gyro_frequency_callable] * parameter_number,
+            [magnetic_field_vec_callable] * parameter_number,
+            [plasma_frequency_callable] * parameter_number
         )
     )
 
@@ -283,16 +373,21 @@ def calculate_derivatives(
     print(f"Expecting {elements*4} integrations")
 
     # Parallelize calculation of directional off diagonal derivatives
-    off_diagonal_d_results = usable_pool.map(
-        off_diagonal_dirs,
+    off_diagonal_d_results = usable_pool.starmap(
+        calculate_off_diagonal_dirs,
         zip(
             [
                 variable_indices[pair_generator(n, parameter_number)]
                 for n in range(elements)
             ],
+            [start_point_spherical] * elements,
+            [end_point_spherical] * elements,
             [current_path_parameters] * elements,
-            [integration_point_count] * elements,
-            [derivative_step_size] * elements
+            [integration_step_number] * elements,
+            [derivative_step_size] * elements,
+            [gyro_frequency_callable] * elements,
+            [magnetic_field_vec_callable] * elements,
+            [plasma_frequency_callable] * elements
         )
     )
 
@@ -310,23 +405,85 @@ def calculate_derivatives(
     return matrix, gradient
 
 
+def newton_raphson_step(
+        current_path_parameters: np.ndarray,
+        start_point_spherical: np.ndarray,
+        end_point_spherical: np.ndarray,
+        gyro_frequency_callable: typing.Callable,
+        magnetic_field_vec_callable: typing.Callable,
+        plasma_frequency_callable: typing.Callable,
+        variable_indices: np.ndarray = np.array([1, -1]),
+        **kwargs):
+    """
+    Perform a newton raphson step as defined in Equation 19 of Coleman 2011. Thi
+    See Section 3.1 for this definition.
+    :param current_path_parameters: The current path parameters (alpha_i) before the newton raphson step
+    :param start_point_spherical: The path start point in spherical coordinates
+    :param end_point_spherical: The path end point in spherical coordinates
+    :param gyro_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the gyro frequency
+    :param magnetic_field_vec_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the magnetic field vec
+    :param plasma_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the plasma frequency
+    :param variable_indices: Array of indices for which we should NOT change or calculate change
+    (usually first and last)
+    :param kwargs: The rest of the arguments are passed to the derivative calculation
+    :return: A tuple of (The hessian due to the The next path after the iteration)
+    """
+    incomplete_hessian, incomplete_gradient = calculate_derivatives(
+        current_path_parameters,
+        start_point_spherical,
+        end_point_spherical,
+        gyro_frequency_callable,
+        magnetic_field_vec_callable,
+        plasma_frequency_callable,
+        variable_indices=variable_indices,
+        **kwargs
+    )
+
+    inverse_matrix = linalg.pinvh(incomplete_hessian)
+    incomplete_change = np.matmul(inverse_matrix, incomplete_gradient)
+
+    change = np.zeros_like(current_path_parameters)
+    change[variable_indices] = incomplete_change
+
+    change_mag = linalg.norm(change)
+
+    print(f"Change magnitude: {change_mag}")
+
+    return incomplete_hessian, incomplete_gradient, change
+
+
 def trace(
-        initial_point: np.ndarray, final_point: np.ndarray,
+        start_point_spherical: np.ndarray,
+        end_point_spherical: np.ndarray,
+        gyro_frequency_callable: typing.Callable,
+        magnetic_field_vec_callable: typing.Callable,
+        plasma_frequency_callable: typing.Callable,
         max_newton_raphson_steps: int = 50,
         minimum_change_per_position: int = 50,
-        step_size: float = 1000,
+        integration_step_number: int = None,
+        derivative_step_size: float = None,
         parameters: typing.Tuple = None,
         visualize: bool = True,
         arrows: bool = False,
         save_plots: bool = False):
     """
     Traces the path using the specified path parameters
-    :param initial_point: Initial path point point in spherical coordinates
-    :param final_point: Final path point in spherical coordinates
+    :param start_point_spherical: The path start point in spherical coordinates
+    :param end_point_spherical: The path end point in spherical coordinates
+    :param gyro_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the gyro frequency
+    :param magnetic_field_vec_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the magnetic field vec
+    :param plasma_frequency_callable: A callable that takes inputs of cartesian coordinates and their norms
+    and returns the plasma frequency
     :param max_newton_raphson_steps: Stop iterating if there are more total iterations than this
     :param minimum_change_per_position: If the average change between paths in one iteration is less than
     minimum_change_per_position, then stop iterating
-    :param step_size: The step size to use to calculate the finite step derivatives
+    :param integration_step_number: The number of steps to use in integration
+    :param derivative_step_size: The step size to use to calculate the finite step derivatives
     :param parameters: A tuple of (radial parameter count, normal parameter count)
     :param visualize: Visualize the path as we are generating it.
     Primarily for debug reasons
@@ -341,6 +498,8 @@ def trace(
         parameter_number = constants.DEFAULT_TRACER_PARAMETERS[0] + constants.DEFAULT_TRACER_PARAMETERS[1]
 
     calculated_paths = []
+    # TODO: Create the first calculated_path with parameter_number[0]
+    #  radial parameters and parameter_number[1] normal ones
 
     if visualize:
         plotting.visualize_trace(calculated_paths, plot_all=True, show=True)
@@ -353,7 +512,13 @@ def trace(
         print(f"Preforming Newton Raphson Step {i}")
         incomplete_hessian, incomplete_gradient, change_vec = newton_raphson_step(
             calculated_paths[-1],
-            step_size=step_size,
+            start_point_spherical,
+            end_point_spherical,
+            gyro_frequency_callable,
+            magnetic_field_vec_callable,
+            plasma_frequency_callable,
+            derivative_step_size=derivative_step_size,
+            integration_step_number=integration_step_number,
             pool=pool
         )
 
@@ -390,7 +555,19 @@ def trace(
                 plt.show()
                 plt.close()
 
-            current_p = integrate_parameter(calculated_paths[-1], show=True, save=i)
+            cartesian_callable = path.generate_cartesian_callable(
+                calculated_paths[-1],
+                start_point_spherical,
+                end_point_spherical
+            )
+            current_p = integrate_over_path(
+                cartesian_callable,
+                gyro_frequency_callable,
+                magnetic_field_vec_callable,
+                plasma_frequency_callable,
+                show=True
+            )
+
             print(f"Current total phase angle: {current_p}")
             fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
             image = ax.imshow(incomplete_hessian)
@@ -425,7 +602,7 @@ if __name__ == "__main__":
     final = Vector.spherical_to_cartesian(
         Vector.latitude_to_spherical(
             array([coords.EARTH_RADIUS, 90 + 23.5 - 10, 133.7])))
-    atmosphere = ChapmanLayers(7E6, 350E3, 100E3, (0.375E6 * 180 / PI, -1), initial)
+    atmosphere = ChapmanLayers(7E6, 350E3, 100E3, (0.375E6 * 180 / math.pi, -1), initial)
     path_generator = QuasiParabolic
     frequency = 10E6  # Hz
     atmosphere.visualize(initial, final, ax=None, fig=None, point_number=400, show=True)

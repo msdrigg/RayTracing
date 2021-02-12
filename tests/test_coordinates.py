@@ -114,7 +114,7 @@ class TestCoordinates(TestCase):
         ]
         for spherical, path_comp, path in point_path_pairs:
             np.testing.assert_allclose(
-                coordinates.spherical_to_path_component(
+                coordinates.standard_to_path_component(
                     spherical, *path
                 ),
                 path_comp,
@@ -122,7 +122,7 @@ class TestCoordinates(TestCase):
             )
 
             np.testing.assert_allclose(
-                coordinates.spherical_to_cartesian(coordinates.path_component_to_spherical(
+                coordinates.spherical_to_cartesian(coordinates.path_component_to_standard(
                     path_comp, *path
                 )),
                 coordinates.spherical_to_cartesian(
@@ -132,8 +132,8 @@ class TestCoordinates(TestCase):
             )
 
         for path in [(self.path_start_2, self.path_end_2), (self.path_start_1, self.path_end_1)]:
-            path_comp = coordinates.spherical_to_path_component(vecs, path[0], path[1])
-            washed_coordinate = coordinates.path_component_to_spherical(path_comp, path[0], path[1])
+            path_comp = coordinates.standard_to_path_component(vecs, path[0], path[1])
+            washed_coordinate = coordinates.path_component_to_standard(path_comp, path[0], path[1])
 
             np.testing.assert_allclose(
                 coordinates.spherical_to_cartesian(washed_coordinate),
@@ -145,8 +145,8 @@ class TestCoordinates(TestCase):
         for point_path_pair in self.coords_paths_paths:
             path = point_path_pair[1]
             for coordinate in [self.spherical_1, self.spherical_3, self.spherical_4, self.spherical_2[0], self.spherical_2[1]]:
-                path_comp = coordinates.spherical_to_path_component(coordinate, path[1], path[2])
-                washed_coordinate = coordinates.path_component_to_spherical(path_comp, path[1], path[2])
+                path_comp = coordinates.standard_to_path_component(coordinate, path[1], path[2])
+                washed_coordinate = coordinates.path_component_to_standard(path_comp, path[1], path[2])
 
                 np.testing.assert_allclose(
                     coordinates.spherical_to_cartesian(washed_coordinate),
@@ -156,7 +156,7 @@ class TestCoordinates(TestCase):
 
             np.testing.assert_allclose(
                 path[0],
-                coordinates.spherical_to_path_component(point_path_pair[0], path[1], path[2]),
+                coordinates.standard_to_path_component(point_path_pair[0], path[1], path[2]),
                 rtol=1e-7, atol=0.01
             )
 
@@ -164,7 +164,7 @@ class TestCoordinates(TestCase):
         for point_path_pair in self.coords_paths_paths:
             path = point_path_pair[1]
 
-            spherical = coordinates.path_component_to_spherical(*path)
+            spherical = coordinates.path_component_to_standard(*path)
             np.testing.assert_allclose(
                 point_path_pair[0],
                 coordinates.regularize_spherical_coordinates(spherical)
