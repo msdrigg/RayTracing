@@ -27,11 +27,21 @@ This will serve as a checklist for the project
 1. Profile one newton raphson step 
 to determine where the most important optimizations need to occur.
    1. Generate profile outputs, and flame diagrams
-2. Investigate whether rust/julia would improve some core functionality
+2. Investigate whether other implementations would improve some core functionality
+    1. Rust + open-blas for low level processing
+    2. Julia for something
+    3. Python+Ray or Multiprocess.Array to replace raw multiprocessing for 
+    sending large numpy arrays between processes
+    4. See https://docs.scipy.org/doc/scipy/reference/tutorial/integrate.html?highlight=scipy%20integrate%20simps
+    for how to pass C functions to scipy integration
+    5. Switch to rompberg integration -- Need 2^k + 1 equally spaced points
+        1. DONE, NEEDS TESTING
+    6. Profile different solvers for y_p, p_t
+        1. Notice that y_p and p_t are both constrained to be between -1 and 1
 3. Investigate algorithms for solving the hessian linear system
-    1. Conditioning the matrix
+    1. Use scipy.linalg.lstqs or scipy.linalg.pinvh
+        1. TEST RESULTS: lstqs does not work. pinvh does, and 
+        pinvh is marginally faster as well.
+        2. Unless pinvh fails in practice or can be majorly
+        then we will settle on this method
     2. Dynamic parameter positions depending on their variability
-    3. Separate the hessians into 2 matrices 
-       (1 for height and one for normal components)
-    4. Throw out ill-conditioned parameters
-       from the hessian all together. (Radial values)
