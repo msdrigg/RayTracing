@@ -3,11 +3,12 @@ Outline of future changes.
 This will serve as a checklist for the project
 # Ongoing
 1. Test current algorithms
-    1. Test new plotting features
-    2. Test tracer
-    3. Repair test_quasi_parabolic
+    1. Repair test_quasi_parabolic
         1. We changed the order of parameters, so some may need adjusting
         2. We also switched to solely gyro_frequency^2 not e_density
+    2. Test all new utils
+    3. Test new plotting features
+    4. Test tracer
 ## Testing
 1. Retest the core functionality around the zero-field implementation
     1. Test solving perturbations of 
@@ -21,15 +22,6 @@ This will serve as a checklist for the project
 3. Write tests for magnetic field case
     1. Ask Dr. Kaeppler for baseline results
     2. Generate baseline results with PHARLARP
-## Implementation
-1. Implement solution in magnetic field case
-    1. Re-profile with this new algorithm
-    2. Optimize where necessary
-    3. Sanity tests and quantitative tests
-## Restructuring
-1. Rewrite the class-based implementation using functions
-2. Reorganize the code to make sense. I currently rely too heavily on utils.*
-3. Write a high level wrapper that runs the backend code with the least amount of user input
 ## Optimizations
 1. Profile one newton raphson step 
 to determine where the most important optimizations need to occur.
@@ -37,8 +29,10 @@ to determine where the most important optimizations need to occur.
 2. Investigate whether other implementations would improve some core functionality
     1. Rust + open-blas for low level processing
     2. Julia for something
-    3. Python+Ray or Multiprocess.Array to replace raw multiprocessing for 
+    3. Python+Ray to replace raw multiprocessing for 
     sending large numpy arrays between processes
+        1. DONE, NEEDS TESTING: I am using multiprocessing shared_memory now. I don't know if this is better
+        It is supposed to be faster, but I'm not sure
     4. See https://docs.scipy.org/doc/scipy/reference/tutorial/integrate.html?highlight=scipy%20integrate%20simps
     for how to pass C functions to scipy integration
     5. Switch to rompberg integration -- Need 2^k + 1 equally spaced points
@@ -51,9 +45,10 @@ to determine where the most important optimizations need to occur.
         5. Need this HEAVILY optimized because it is called nearly 5 million times
         each iteration
 3. Investigate algorithms for solving the hessian linear system
-    1. Use scipy.linalg.lstqs or scipy.linalg.pinvh
+    1. DONE, NEEDS TESTING
+    2. Use scipy.linalg.lstqs or scipy.linalg.pinvh
         1. TEST RESULTS: lstqs does not work. pinvh does, and 
         pinvh is marginally faster as well.
         2. Unless pinvh fails in practice or can be majorly
         then we will settle on this method
-    2. Dynamic parameter positions depending on their variability
+    3. Dynamic parameter positions depending on their variability

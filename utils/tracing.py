@@ -6,7 +6,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy import linalg, integrate, optimize, interpolate
 import os
-import initialize
+from utils import initialize
 from utils import vector, plotting, path, constants, equations, parallel, coordinates as coords
 import multiprocessing as mp
 from typing import *

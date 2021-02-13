@@ -5,16 +5,16 @@ Set the magnetic field by 'from magnetic field import <chosen field> as magnetic
 You can also change the atmosphere used by manually passing the correct 'calculate_plasma_frequency' function
 to the trace() call. The required atmosphere functions are described in atmosphere.base and magnetic.base
 """
-import tracing
 import numpy as np
-from utils import coordinates as coords
+from utils import tracing, coordinates as coords
 
+# List of module names for magnetic fields
 IMPLEMENTED_MAGNETIC_FIELDS = [
     'dipole',
     'zero'
 ]
 
-# List of module names
+# List of module names for atmospheres
 IMPLEMENTED_ATMOSPHERES = [
     'chapman',
     'quasi_parabolic'
