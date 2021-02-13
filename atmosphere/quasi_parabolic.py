@@ -18,6 +18,7 @@ def get_qp_parameters(*atmosphere_params: float) -> typing.Tuple[float, ...]:
     return atmosphere_params
 
 
+# noinspection PyUnusedLocal
 def calculate_plasma_frequency(position_vector: ArrayLike,
                                norm_vector: ArrayLike,
                                *atmosphere_params) -> np.ndarray:

@@ -1,3 +1,7 @@
+"""
+Function that contains the methods to trace the path.
+The entry point is the trace() function
+"""
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy import linalg, integrate, optimize, interpolate
@@ -21,11 +25,17 @@ magnetic: magnetic_base = None
 INTEGRATING_PATH_PREEMPTIVE = True
 
 
-def load_dynamic_modules(atmosphere_module_name, magnetic_field_module_name):
+def load_dynamic_modules(atmosphere_module_name: str, magnetic_field_module_name: str):
+    """
+    Loads the proper atmosphere module and magnetic field module into a global namespace
+    This is necessary because atmosphere and magnetic field implementations are chosen at runtime
+    :param atmosphere_module_name: Name of the file (in atmosphere package) to import
+    :param magnetic_field_module_name: Name of the file (in magnetic package) to import
+    """
     global atmosphere
-    atmosphere = importlib.import_module('atmosphere' + atmosphere_module_name)
+    atmosphere = importlib.import_module('atmosphere.' + atmosphere_module_name)
     global magnetic
-    magnetic = importlib.import_module('magnetic' + magnetic_field_module_name)
+    magnetic = importlib.import_module('magnetic.' + magnetic_field_module_name)
 
 
 def integrate_over_path(
@@ -55,7 +65,9 @@ def integrate_over_path(
 
     t = r_dot / r_dot_norm
     gyro_frequency_squared_array = magnetic.calculate_gyro_frequency(r, r_norm)
-    y_squared = np.square(gyro_frequency_squared_array / operating_frequency)
+    y = gyro_frequency_squared_array / operating_frequency
+    y_squared = np.square(y)
+
     y_vec = magnetic.calculate_magnetic_field_unit_vec(r, r_norm) * gyro_frequency_squared_array / operating_frequency
     x = atmosphere.calculate_plasma_frequency(r, r_norm) / operating_frequency ** 2
     yt = vector.row_dot_product(y_vec, t)
@@ -67,9 +79,10 @@ def integrate_over_path(
             yp[n] = 0
         else:
             function_args = x[n], y_squared[n], yt[n]
-            y_norm = math.sqrt(y_squared)
+            # TODO: Optimize this. This function gets run nearly 2000*2500 times for each newton-raphson step
+            #   Try brent's method. It's not as quickly convergent but it is written in C
             result, details = optimize.toms748(
-                equations.equation_13, -y_norm, y_norm,
+                equations.equation_13, -y[n], y[n],
                 args=function_args, xtol=1E-15, rtol=1E-15, full_output=True
             )
             if not details.converged:
@@ -281,6 +294,7 @@ def calculate_derivatives(
         vector.normalize_single_vector(coords.spherical_to_cartesian(end_point_spherical))
     ))
 
+    # Calculate integration_step_number using the derivative_step_size if not given
     if integration_step_number is None:
         integration_rough_estimate = \
             total_ground_distance / derivative_step_size * constants.INTEGRATION_STEP_SIZE_FACTOR
@@ -306,14 +320,18 @@ def calculate_derivatives(
     matrix = np.zeros((parameter_number, parameter_number))
 
     # Calculate the off-diagonal elements (Only calculate uppers and set the lower equal to upper)
-    def pair_generator(item_number, param_number):
-        counter = 0
-        for pair_gen_row in range(0, param_number - 1):
-            for pair_gen_col in range(1 + pair_gen_row, param_number):
-                if counter == item_number:
-                    return [pair_gen_row, pair_gen_col]
-                counter += 1
-        raise IndexError("You are indexing for a pair that doesn't exist")
+    def pair_generator(matrix_size):
+        """
+        Generates pairs of numbers that correspond to numbers in the upper triangular portion of a matrix
+        This is used to calculate the off-diagonal derivatives
+        :param matrix_size: The number of elements in one row or column of the matrix (matrix needs to be square)
+        :return: A generator generating index pairs
+        """
+        for pair_gen_row in range(0, matrix_size - 1):
+            for pair_gen_col in range(1 + pair_gen_row, matrix_size):
+                yield [pair_gen_row, pair_gen_col]
+        yield StopIteration("You are looking for an index pair that doesn't exist. "
+                            "All available have already been returned")
 
     if INTEGRATING_PATH_PREEMPTIVE:
         path_current_callable = path.generate_cartesian_callable(
@@ -360,10 +378,7 @@ def calculate_derivatives(
         off_diagonal_async = pool.starmap(
             calculate_off_diagonal_dirs,
             zip(
-                [
-                    variable_indices_array[pair_generator(n, parameter_number)]
-                    for n in range(elements)
-                ],
+                variable_indices_array[list(pair_generator(parameter_number))],
                 [start_point_spherical] * elements,
                 [end_point_spherical] * elements,
                 [shared_memory.name] * elements,
@@ -445,7 +460,7 @@ def trace(
         max_newton_raphson_steps: Optional[int] = 50,
         minimum_change_per_position: Optional[int] = 50,
         integration_step_number: Optional[int] = None,
-        derivative_step_size: Optional[float] = None,
+        derivative_step_size: Optional[float] = 1000,
         parameters: Optional[Tuple] = None,
         interpolated_degree: Optional[int] = 2,
         visualize: Optional[bool] = True,
@@ -505,8 +520,7 @@ def trace(
     calculated_paths.append(initial_path_parameters)
     calculated_paths_components.append(path.generate_path_components(
         initial_path_parameters,
-        start_point_spherical,
-        end_point_spherical
+        degree=interpolated_degree
     ))
 
     if visualize:
@@ -539,8 +553,7 @@ def trace(
         calculated_paths.append(next_path)
         calculated_paths_components.append(path.generate_path_components(
             next_path,
-            start_point_spherical,
-            end_point_spherical
+            degree=interpolated_degree
         ))
 
         if visualize:

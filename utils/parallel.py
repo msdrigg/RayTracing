@@ -1,3 +1,6 @@
+"""
+Utilities to help with parallel processing
+"""
 from multiprocessing import shared_memory
 from contextlib import contextmanager
 import numpy as np
@@ -35,8 +38,6 @@ def read_array_shared_memory(
     """
     Writes the provided array to a shared memory file, and returns that shared memory file
     :param memory_name: The name of the memory to read from
-    :param dtype: The dtype of the array
-    :param shape: The shape of the created array. If none, shape will be a flat array
     """
     memory = shared_memory.SharedMemory(name=memory_name)
 

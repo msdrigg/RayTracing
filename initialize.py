@@ -10,6 +10,7 @@ import numpy as np
 from scipy import optimize
 from utils import coordinates as coords
 import math
+from typing import Tuple, Optional
 
 
 def calculate_param_a(
@@ -71,8 +72,8 @@ def calculate_param_x_b(launch_angle: float, atmosphere_base_height: float) -> f
 
 def ground_distance_derivative(
         launch_angle: float,
-        operating_frequency,
-        *atmosphere_params):
+        operating_frequency: float,
+        *atmosphere_params: float):
     """
     Calculates the derivative of ground distance with respect to launch angle
     This is my own work, and is derived using mathematica
@@ -110,7 +111,7 @@ def ground_distance_derivative(
     return coords.EARTH_RADIUS * ((pos_term_1 + pos_term_2 + pos_term_3) + (neg_term_1 + neg_term_2 + neg_term_3))
 
 
-def get_angle_of_shortest_path(operating_frequency, *atmosphere_params) -> float:
+def get_angle_of_shortest_path(operating_frequency: float, *atmosphere_params: float) -> float:
     """
     Calculates the angle that minimizes ground distance
     :return: The angle of launch (beta_0) that yields the
@@ -197,8 +198,8 @@ def get_apogee_height(
 def get_qp_ground_distances(
         launch_angle: float,
         heights: np.ndarray,
-        operating_frequency,
-        *atmosphere_params) -> np.ndarray:
+        operating_frequency: float,
+        *atmosphere_params: float) -> np.ndarray:
     """
     NOTE: THIS FUNCTION IS THE ONLY UNTESTED FUNCTION.
           IT LIKELY HAS BUGS AND/OR TYPOS. I DIDN'T TEST IT BECAUSE IT
@@ -246,7 +247,7 @@ def get_qp_ground_distances(
 def get_apogee_ground_distance(
         launch_angle: float,
         operating_frequency: float,
-        *atmosphere_params: float) -> np.ndarray:
+        *atmosphere_params: float) -> float:
     """
     Gets the path in the qp atmosphere
     :param launch_angle: launch angle of the path
@@ -342,7 +343,7 @@ def get_quasi_parabolic_path(
         atmosphere_height_of_max: float,
         atmosphere_base_height: float,
         atmosphere_max_plasma_frequency_squared: float,
-        step_size_horizontal: float = 5) -> np.ndarray:
+        step_size_horizontal: Optional[float] = 5) -> Tuple[np.ndarray, ...]:
     """
     This is the primary function to generate the
     points along a path in a quasi-parabolic atmosphere
@@ -387,7 +388,14 @@ def get_quasi_parabolic_path(
         angle_calculation_intervals += ((epsilon, math.pi/2 - epsilon), )
 
     # Function who's roots are the launch angles we want
-    def minimization_function(launch_angle: float) -> float:
+    def root_finding_function(launch_angle: float) -> float:
+        """
+        Function to find root of. This is equal to apogee_distance * 2 - expected_distance.
+        This root occurs when apogee_distance = expected_distance/2, just as we want
+        :param launch_angle: Launch angle of the current evaluation. When the path distance matches our desired path,
+        launch_angle will be the angle for that desired path
+        :return: The result of apogee_distance = expected_distance/2
+        """
         return get_apogee_ground_distance(launch_angle, *atmosphere_params) * 2 - path_ground_distance
 
     # Get path angles
@@ -395,14 +403,14 @@ def get_quasi_parabolic_path(
     for interval in angle_calculation_intervals:
         try:
             new_angle, _ = optimize.bisect(
-                minimization_function, interval[0], interval[1],
+                root_finding_function, interval[0], interval[1],
                 full_output=True, disp=True
             )
         except ValueError:
             raise ValueError("Error finding optimal path angle in "
                              "interval (a, b) = ({}, {}), "
                              "with (f(a), f(b)) = ({}, {})"
-                             .format(*interval, *[minimization_function(i) for i in interval]))
+                             .format(*interval, *[root_finding_function(i) for i in interval]))
         new_angle_is_unique = True
         for angle in angles:
             if abs(angle - new_angle) < 1E-6:
@@ -414,11 +422,12 @@ def get_quasi_parabolic_path(
     paths = ()
     num = 1 + math.ceil(path_ground_distance/step_size_horizontal)
     distances = np.linspace(0.0, path_ground_distance, num=num)
+
     for angle in angles:
         full_vector = np.empty((distances.shape[0], 2))
         full_vector[:, 0] = distances
         full_vector[:, 1] = get_qp_heights(angle, distances, *atmosphere_params)
-        paths = paths + (full_vector,)
+        paths += full_vector,
 
     # Checking that these paths match desired results
     for path in paths:

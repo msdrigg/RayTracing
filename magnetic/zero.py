@@ -1,8 +1,14 @@
+"""
+Implements a 0 magnetic field.
+Because magnetic_field_vec must be normalized, I set all vectors to (0, 0, 1) -- pointing upward in the z axis
+"""
+
 import numpy as np
 from numpy.typing import *
 from typing import Optional
 
 
+# noinspection PyUnusedLocal
 def calculate_gyro_frequency(
         position_vector: ArrayLike,
         norms: Optional[ArrayLike] = None) -> ArrayLike:
@@ -16,6 +22,7 @@ def calculate_gyro_frequency(
     return np.zeros(position_vector.shape[0])
 
 
+# noinspection PyUnusedLocal
 def calculate_magnetic_field_unit_vec(
         position_vector: ArrayLike,
         norms: Optional[ArrayLike] = None) -> ArrayLike:

@@ -1,7 +1,10 @@
+"""
+General testing utils
+"""
 import math
 
 
-def assert_is_close(num1, num2, rel_tol=1E-9, abs_tol=0.0):
+def assert_is_close(num1: float, num2: float, rel_tol: float = 1E-9, abs_tol: float = 0.0):
     """
     Asserts that math.isclose returns true
     """

@@ -1,12 +1,16 @@
+"""
+Functions to perform conversions between certain coordinate systems
+"""
 import math
 import warnings
 from scipy import linalg
 import numpy as np
 from scipy.spatial.transform import Rotation
 from utils import vector
+from typing import Optional
 
 # Earth radius meters. DO NOT EDIT
-EARTH_RADIUS = 6.371E6
+EARTH_RADIUS: float = 6.371E6
 
 
 # This takes geographic as a numpy vector of coordinates, or single coordinates
@@ -14,6 +18,12 @@ EARTH_RADIUS = 6.371E6
 # It returns
 #   (radius: meters, polar: radians, azimuthal: radians)
 def geographic_to_spherical(geographic: np.ndarray) -> np.ndarray:
+    """
+    Converts coordinates in (latitude, longitude) format with angles in degrees
+    to spherical coordinates with angles in radians
+    :param geographic: An array of shape (N, 2) with rows being (latitude, longitude)
+    :return: An array of shape (N, 3) with rows the spherical coordinates corresponding to the provided locations
+    """
     geographic_vectorized = np.atleast_2d(geographic)
     if np.any(geographic_vectorized[:, 2] < - EARTH_RADIUS):
         warnings.warn(RuntimeWarning("Getting at least one geographic vectors with altitudes less than -EARTH_RADIUS"))
@@ -27,6 +37,12 @@ def geographic_to_spherical(geographic: np.ndarray) -> np.ndarray:
 
 # This performs the inverse of geographic_to_spherical
 def spherical_to_geographic(spherical: np.ndarray) -> np.ndarray:
+    """
+    Converts spherical coordinates to geographic
+    :param spherical: An array of size (N, 3) with rows corresponding to spherical coordinates
+    :return: An array of size (N, 2) with rows being (latitude, longitude),
+     which correspond to the provided coordinates
+    """
     spherical_vectorized = np.atleast_2d(spherical)
     if np.any(spherical_vectorized[:, 0] < 0):
         warnings.warn(RuntimeWarning("Getting at least one spherical vectors with radius's less than 0"))
@@ -38,7 +54,7 @@ def spherical_to_geographic(spherical: np.ndarray) -> np.ndarray:
     return vector.flatten_if_necessary(geographic)
 
 
-def spherical_to_cartesian(spherical):
+def spherical_to_cartesian(spherical: np.ndarray) -> np.ndarray:
     """Returns the cartesian form of the spherical vector.
         spherical_vector can be a numpy array where rows are spherical vectors
         (or a single vector)"""
@@ -52,7 +68,7 @@ def spherical_to_cartesian(spherical):
     return vector.flatten_if_necessary(cartesian_vector)
 
 
-def cartesian_to_spherical(cartesian):
+def cartesian_to_spherical(cartesian: np.ndarray) -> np.ndarray:
     """Returns the spherical form of the cartesian vector.
         cartesian can be a numpy array where rows are cartesian vectors
         (or a single vector)"""
@@ -73,7 +89,7 @@ def standard_to_path_component(
         standard: np.ndarray,
         path_start_spherical: np.ndarray,
         path_end_spherical: np.ndarray,
-        from_spherical: bool = True) -> np.ndarray:
+        from_spherical: Optional[bool] = True) -> np.ndarray:
     """
     Converts coordinates to path component form (distance along path (along earths surface),
         distance normal to path (along earths surface), height (above earths surface))
@@ -129,7 +145,7 @@ def path_component_to_standard(
         path_components: np.ndarray,
         path_start_spherical: np.ndarray,
         path_end_spherical: np.ndarray,
-        to_spherical: bool = True) -> np.ndarray:
+        to_spherical: Optional[bool] = True) -> np.ndarray:
     """
     NOTE: path_start and path_end cannot be at opposite poles
         (obviously, because then path between them is arbitrary)

@@ -1,6 +1,10 @@
+# noinspection SpellCheckingInspection
 """
 This file implements the chapman layers atmosphere.
 To see the required atmosphere function definitions look at atmosphere.base
+
+The equations in this file were gotten from
+www.uio.no/studier/emner/matnat/fys/nedlagte-emner/FYS3610/h04/undervisningsmateriale/Chapter%204-25August.pdf
 """
 
 from numpy.typing import *
@@ -21,9 +25,6 @@ def calculate_plasma_frequency_squared(
     if norms is None:
         norms = linalg.norm(position_vector, axis=1)
 
-    # Equation, but with an additional factor of 2. I have adjusted to add this factor of 2 because without it,
-    # we are only matching ion_production, not electron density.
-    # www.uio.no/studier/emner/matnat/fys/nedlagte-emner/FYS3610/h04/undervisningsmateriale/Chapter%204-25August.pdf
     atmosphere_height_of_max, atmosphere_semi_width, maximum_plasma_frequency_squared = chapman_params
 
     z1 = (norms - atmosphere_height_of_max) / atmosphere_semi_width

@@ -1,3 +1,6 @@
+"""
+Plotting functions
+"""
 from matplotlib import pyplot as plt
 import numpy as np
 from utils import coordinates as coords
@@ -190,6 +193,12 @@ def visualize_points(points: dict, fig=None, ax=None, show=True):
         ax = fig.add_subplot(111, projection='3d')
 
     def axis_equal3d(old_ax):
+        """
+        This function was taken from stack overflow. It is supposed to set the x, y, z axis such that they are
+        equal and the content is scaled properly. It is not working 100% though
+        :param old_ax: The axes object to rescale
+        :return: a new axis object with the axes rescaled
+        """
         extents = np.array([getattr(old_ax, 'get_{}lim'.format(dim))() for dim in 'xyz'])
         sz = extents[:, 1] - extents[:, 0]
         centers = np.mean(extents, axis=1)
@@ -217,6 +226,11 @@ def visualize_points(points: dict, fig=None, ax=None, show=True):
 
 
 def visualize_tracing_debug(r, r_dot):
+    """
+    This function is a debug tool that will help visualize the trace as it happens
+    :param r: Array of cartesian points along the path
+    :param r_dot: Array of vector derivatives at each point in r
+    """
     step_size = 1/r.shape[0]
     rx = integrate.simps(r_dot[:, 0], dx=step_size)
     ry = integrate.simps(r_dot[:, 1], dx=step_size)
@@ -236,7 +250,7 @@ def visualize_tracing_debug(r, r_dot):
     v = np.linspace(0, np.pi, 100)
     x = coords.EARTH_RADIUS * np.outer(np.cos(u), np.sin(v))
     y = coords.EARTH_RADIUS * np.outer(np.sin(u), np.sin(v))
-    z = coords.EARTH_RADIUS * np.outer(np.ones(np.size(u)), np.cos(v))
+    z = coords.EARTH_RADIUS * np.outer(np.ones(u.size), np.cos(v))
     ax.plot_surface(x, y, z, color='b', alpha=0.4)
     ax.plot3D(r[:, 0], r[:, 1], r[:, 2], 'red')
     ax.plot3D(r_estimate[:, 0], r_estimate[:, 1], r_estimate[:, 2], 'green')

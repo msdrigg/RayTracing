@@ -6,6 +6,7 @@ import typing
 from numpy.typing import *
 
 
+# noinspection PyUnusedLocal
 def calculate_plasma_frequency_squared(
         position_vector: ArrayLike,
         norms: ArrayLike = None,

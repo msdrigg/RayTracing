@@ -1,3 +1,8 @@
+"""
+Implements the dipole model of earths magnetic field. For reference, these calculations were taken from these sources
+https://en.wikipedia.org/wiki/Magnetic_dipole
+https://en.wikipedia.org/wiki/Dipole_model_of_the_Earth%27s_magnetic_field
+"""
 from utils import constants, vector
 import numpy as np
 from utils.constants import STANDARD_MAGNETIC_FIELD_MAXIMUM as B_MAX

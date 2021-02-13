@@ -6,6 +6,7 @@ from numpy.typing import *
 from typing import Optional
 
 
+# noinspection PyUnusedLocal
 def calculate_gyro_frequency(
         position_vector: ArrayLike,
         norms: Optional[ArrayLike] = None) -> ArrayLike:
@@ -19,6 +20,7 @@ def calculate_gyro_frequency(
     pass
 
 
+# noinspection PyUnusedLocal
 def calculate_magnetic_field_unit_vec(
         position_vector: ArrayLike,
         norms: Optional[ArrayLike] = None) -> ArrayLike:

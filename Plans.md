@@ -2,11 +2,7 @@
 Outline of future changes.
 This will serve as a checklist for the project
 # Ongoing
-1. Finish implementing current efforts
-    1. paths.generate_cartesian_callable
-    2. path.generate_path_components from the parameters
-    3. run function for quick testing
-2. Test current algorithms
+1. Test current algorithms
     1. Test new plotting features
     2. Test tracer
     3. Repair test_quasi_parabolic
@@ -49,6 +45,11 @@ to determine where the most important optimizations need to occur.
         1. DONE, NEEDS TESTING
     6. Profile different solvers for y_p, p_t
         1. Notice that y_p and p_t are both constrained to be between -1 and 1
+        2. We also note that a good guess for y_p is y_t
+        3. Currently trying toms748, which is fast, but written in python
+        4. Could use a version of brent's which is written in C
+        5. Need this HEAVILY optimized because it is called nearly 5 million times
+        each iteration
 3. Investigate algorithms for solving the hessian linear system
     1. Use scipy.linalg.lstqs or scipy.linalg.pinvh
         1. TEST RESULTS: lstqs does not work. pinvh does, and 
