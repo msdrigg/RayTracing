@@ -1,10 +1,11 @@
 import numpy as np
 from numpy.typing import *
+from typing import Optional
 
 
 def calculate_gyro_frequency(
         position_vector: ArrayLike,
-        norms: ArrayLike = None) -> np.ndarray:
+        norms: Optional[ArrayLike] = None) -> ArrayLike:
     """
     This function calculates the gyro frequency at the provided points
     :param position_vector: This is an array of shape (N, 3) whose rows contain cartesian coordinates
@@ -17,7 +18,7 @@ def calculate_gyro_frequency(
 
 def calculate_magnetic_field_unit_vec(
         position_vector: ArrayLike,
-        norms: ArrayLike = None) -> np.ndarray:
+        norms: Optional[ArrayLike] = None) -> ArrayLike:
     """
     This function calculates the unit magnetic field vector (magnitude 1) at different points.
     We split this up with the previous function to optimize it.

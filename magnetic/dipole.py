@@ -3,11 +3,13 @@ import numpy as np
 from utils.constants import STANDARD_MAGNETIC_FIELD_MAXIMUM as B_MAX
 from utils.constants import EARTH_RADIUS_CUBED
 from numpy.typing import *
+from typing import Optional
+from scipy import linalg
 
 
 def calculate_gyro_frequency(
         position_vector: ArrayLike,
-        norms: ArrayLike = None) -> np.ndarray:
+        norms: Optional[ArrayLike] = None) -> ArrayLike:
     """
     This function calculates the gyro frequency at the provided points
     :param position_vector: This is an array of shape (N, 3) whose rows contain cartesian coordinates
@@ -15,6 +17,9 @@ def calculate_gyro_frequency(
     This parameter is an optional speed up to reduce the repeated calculating of norms.
     :returns: A vector whose elements are the gyro frequency evaluated at the provided cartesian coordinates
     """
+    if norms is None:
+        norms = linalg.norm(position_vector, axis=1)
+
     radii_cubed = np.power(norms, -3)
     cos_thetas = position_vector[:, 2] / norms
     
@@ -25,7 +30,7 @@ def calculate_gyro_frequency(
 
 def calculate_magnetic_field_unit_vec(
         position_vector: ArrayLike,
-        norms: ArrayLike = None) -> np.ndarray:
+        norms: Optional[ArrayLike] = None) -> ArrayLike:
     """
     This function calculates the unit magnetic field vector (magnitude 1) at different points.
     We split this up with the previous function to optimize it. See the equation for B(r) in
@@ -35,6 +40,9 @@ def calculate_magnetic_field_unit_vec(
     This parameter is an optional speed up to reduce the repeated calculating of norms.
     :returns: A (N, 3) array whose rows are the magnetic field vectors in cartesian coordinates
     """
+    if norms is None:
+        norms = linalg.norm(position_vector, axis=1)
+
     unit_position_vectors = position_vector / norms
 
     # We are optimizing here because we know that the unit_magnetic_moment of earth's magnetic field is
