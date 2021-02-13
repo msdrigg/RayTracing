@@ -3,6 +3,7 @@ import numpy as np
 from utils import coordinates as coords
 import typing
 import math
+from scipy import integrate
 
 # This import registers the 3D projection, but is otherwise unused.
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
@@ -213,3 +214,36 @@ def visualize_points(points: dict, fig=None, ax=None, show=True):
     if show:
         plt.show()
     return fig, ax
+
+
+def visualize_tracing_debug(r, r_dot):
+    step_size = 1/r.shape[0]
+    rx = integrate.simps(r_dot[:, 0], dx=step_size)
+    ry = integrate.simps(r_dot[:, 1], dx=step_size)
+    rz = integrate.simps(r_dot[:, 2], dx=step_size)
+    r_estimate = np.zeros_like(r)
+    ip = r[0]
+    fp = r[-1]
+    r_estimate[0] = r[0]
+    for i in range(1, r.shape[0]):
+        r_estimate[i, 0] = integrate.simps(r_dot[:i, 0], dx=step_size) + r[0, 0]
+        r_estimate[i, 1] = integrate.simps(r_dot[:i, 1], dx=step_size) + r[0, 1]
+        r_estimate[i, 2] = integrate.simps(r_dot[:i, 2], dx=step_size) + r[0, 2]
+    r_estimate[-1] = r[-1]
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    u = np.linspace(0, 2 * np.pi, 100)
+    v = np.linspace(0, np.pi, 100)
+    x = coords.EARTH_RADIUS * np.outer(np.cos(u), np.sin(v))
+    y = coords.EARTH_RADIUS * np.outer(np.sin(u), np.sin(v))
+    z = coords.EARTH_RADIUS * np.outer(np.ones(np.size(u)), np.cos(v))
+    ax.plot_surface(x, y, z, color='b', alpha=0.4)
+    ax.plot3D(r[:, 0], r[:, 1], r[:, 2], 'red')
+    ax.plot3D(r_estimate[:, 0], r_estimate[:, 1], r_estimate[:, 2], 'green')
+    plt.show()
+    plt.plot(r_dot[:, 0], color='blue')
+    plt.plot(r_dot[:, 1], color='red')
+    plt.plot(r_dot[:, 2], color='green')
+    plt.show()
+    print(f"Total r-dot: {np.array([rx, ry, rz])}.")
+    print(f"Total change: {fp - ip}")

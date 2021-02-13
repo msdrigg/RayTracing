@@ -1,10 +1,13 @@
-import numpy as np
+"""
+This class does not define any method bodies, but it does define
+the required functions and their call signatures that all implementations of atmosphere must provide
+"""
 from numpy.typing import *
 
 
 def calculate_gyro_frequency(
         position_vector: ArrayLike,
-        norms: ArrayLike = None) -> np.ndarray:
+        norms: ArrayLike = None) -> ArrayLike:
     """
     This function calculates the gyro frequency at the provided points
     :param position_vector: This is an array of shape (N, 3) whose rows contain cartesian coordinates
@@ -12,12 +15,12 @@ def calculate_gyro_frequency(
     This parameter is an optional speed up to reduce the repeated calculating of norms.
     :returns: A vector whose elements are the gyro frequency evaluated at the provided cartesian coordinates
     """
-    return np.zeros(position_vector.shape[0])
+    pass
 
 
 def calculate_magnetic_field_unit_vec(
         position_vector: ArrayLike,
-        norms: ArrayLike = None) -> np.ndarray:
+        norms: ArrayLike = None) -> ArrayLike:
     """
     This function calculates the unit magnetic field vector (magnitude 1) at different points.
     We split this up with the previous function to optimize it.
@@ -26,10 +29,5 @@ def calculate_magnetic_field_unit_vec(
     This parameter is an optional speed up to reduce the repeated calculating of norms.
     :returns: A (N, 3) array whose rows are the magnetic field vectors in cartesian coordinates
     """
-    result = np.zeros_like(position_vector)
+    pass
 
-    # We can't actually return a 0 vector.
-    # We need it to be normalized, so we return a constant vector whose only component is a unit z component
-    result[:, 2] = 1
-
-    return result

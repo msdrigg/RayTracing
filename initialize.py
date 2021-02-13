@@ -13,44 +13,44 @@ import math
 
 
 def calculate_param_a(
+        operating_frequency: float,
         atmosphere_height_of_max: float,
         atmosphere_base_height: float,
-        atmosphere_max_e_density: float,
-        operating_frequency: float) -> float:
+        atmosphere_max_plasma_frequency_squared: float) -> float:
     """
     Calculates the A parameter following Hill 1979
     """
     semi_width = atmosphere_base_height - atmosphere_height_of_max
-    t1 = 80.62*atmosphere_max_e_density / operating_frequency ** 2
-    t2 = 80.62 * atmosphere_max_e_density * (atmosphere_base_height / (operating_frequency * semi_width)) ** 2
+    t1 = atmosphere_max_plasma_frequency_squared / operating_frequency ** 2
+    t2 = atmosphere_max_plasma_frequency_squared * (atmosphere_base_height / (operating_frequency * semi_width)) ** 2
     return (1 + t2) - t1
 
 
 def calculate_param_b(
+        operating_frequency: float,
         atmosphere_height_of_max: float,
         atmosphere_base_height: float,
-        atmosphere_max_e_density: float,
-        operating_frequency: float) -> float:
+        atmosphere_max_plasma_frequency_squared: float) -> float:
     """
     Calculates the B parameter following Hill 1979
     """
     semi_width = atmosphere_base_height - atmosphere_height_of_max
-    top = -2 * atmosphere_height_of_max * 80.62 * atmosphere_max_e_density * atmosphere_base_height ** 2
+    top = -2 * atmosphere_height_of_max * atmosphere_max_plasma_frequency_squared * atmosphere_base_height ** 2
     bottom = (operating_frequency * semi_width) ** 2
     return top/bottom
 
 
 def calculate_param_c(
         launch_angle: float,
+        operating_frequency: float,
         atmosphere_height_of_max: float,
         atmosphere_base_height: float,
-        atmosphere_max_e_density: float,
-        operating_frequency: float) -> float:
+        atmosphere_max_plasma_frequency_squared: float) -> float:
     """
     Calculates the C parameter following Hill 1979
     """
     semi_width = atmosphere_base_height - atmosphere_height_of_max
-    top = 80.62 * atmosphere_max_e_density * (atmosphere_base_height * atmosphere_height_of_max) ** 2
+    top = atmosphere_max_plasma_frequency_squared * (atmosphere_base_height * atmosphere_height_of_max) ** 2
     bottom = (operating_frequency * semi_width) ** 2
     return top/bottom - (coords.EARTH_RADIUS * math.cos(launch_angle)) ** 2
 
@@ -71,6 +71,7 @@ def calculate_param_x_b(launch_angle: float, atmosphere_base_height: float) -> f
 
 def ground_distance_derivative(
         launch_angle: float,
+        operating_frequency,
         *atmosphere_params):
     """
     Calculates the derivative of ground distance with respect to launch angle
@@ -78,9 +79,9 @@ def ground_distance_derivative(
     See equation 6 in Hill 1979
     """
     atmosphere_base_height = atmosphere_params[1]
-    a = calculate_param_a(*atmosphere_params)
-    b = calculate_param_b(*atmosphere_params)
-    c = calculate_param_c(launch_angle, *atmosphere_params)
+    a = calculate_param_a(operating_frequency, *atmosphere_params)
+    b = calculate_param_b(operating_frequency, *atmosphere_params)
+    c = calculate_param_c(launch_angle, operating_frequency, *atmosphere_params)
 
     discriminant = b ** 2 - 4 * a * c
     x_b = calculate_param_x_b(launch_angle, atmosphere_base_height)
@@ -109,7 +110,7 @@ def ground_distance_derivative(
     return coords.EARTH_RADIUS * ((pos_term_1 + pos_term_2 + pos_term_3) + (neg_term_1 + neg_term_2 + neg_term_3))
 
 
-def get_angle_of_shortest_path(*atmosphere_params) -> float:
+def get_angle_of_shortest_path(operating_frequency, *atmosphere_params) -> float:
     """
     Calculates the angle that minimizes ground distance
     :return: The angle of launch (beta_0) that yields the
@@ -117,7 +118,7 @@ def get_angle_of_shortest_path(*atmosphere_params) -> float:
     """
     try:
         pedersen_angle = get_pedersen_angle(*atmosphere_params)
-        result, _ = optimize.bisect(lambda a: ground_distance_derivative(a, *atmosphere_params),
+        result, _ = optimize.bisect(lambda a: ground_distance_derivative(a, operating_frequency, *atmosphere_params),
                                     0, pedersen_angle - 1E-6,
                                     disp=True, full_output=True)
         return result
@@ -128,26 +129,27 @@ def get_angle_of_shortest_path(*atmosphere_params) -> float:
 
 
 def get_pedersen_angle(
+        operating_frequency: float,
         atmosphere_height_of_max: float,
         atmosphere_base_height: float,
-        atmosphere_max_e_density: float,
-        operating_frequency: float) -> float:
+        atmosphere_max_plasma_frequency_squared: float) -> float:
     """
     Calculates the pedersen angle for the atmosphere.
     See Equation 10 in Hill 1979
-    :param atmosphere_max_e_density: see get_quasi_parabolic_path
+    :param atmosphere_max_plasma_frequency_squared: see get_quasi_parabolic_path
     :param atmosphere_base_height: see get_quasi_parabolic_path
     :param atmosphere_height_of_max: see get_quasi_parabolic_path
     :param operating_frequency: see get_quasi_parabolic_path
     :return: The pedersen angle (in radians)
     """
     atmosphere_params = (
-        atmosphere_height_of_max, atmosphere_base_height,
-        atmosphere_max_e_density, operating_frequency
+        atmosphere_height_of_max,
+        atmosphere_base_height,
+        atmosphere_max_plasma_frequency_squared
     )
 
-    a = calculate_param_a(*atmosphere_params)
-    b = calculate_param_b(*atmosphere_params)
+    a = calculate_param_a(operating_frequency, *atmosphere_params)
+    b = calculate_param_b(operating_frequency, *atmosphere_params)
     radical = -b * (atmosphere_height_of_max + b / (2 * a)) / 2
 
     try:
@@ -160,28 +162,28 @@ def get_pedersen_angle(
 
 def get_apogee_height(
         launch_angle: float,
+        operating_frequency: float,
         atmosphere_height_of_max: float,
         atmosphere_base_height: float,
-        atmosphere_max_e_density: float,
-        operating_frequency: float) -> float:
+        atmosphere_max_plasma_frequency_squared: float) -> float:
     """
     Returns the max ray height above the origin (not ground) in qp atmosphere
     See Equation 7 in Hill 1979
     :param launch_angle: path launch angle
-    :param atmosphere_max_e_density: see get_quasi_parabolic_path
+    :param operating_frequency: see get_quasi_parabolic_path
+    :param atmosphere_max_plasma_frequency_squared: see get_quasi_parabolic_path
     :param atmosphere_base_height: see get_quasi_parabolic_path
     :param atmosphere_height_of_max: see get_quasi_parabolic_path
-    :param operating_frequency: see get_quasi_parabolic_path
     :return: the radius of the path apogee
     """
     atmosphere_params = (
         atmosphere_height_of_max, atmosphere_base_height,
-        atmosphere_max_e_density, operating_frequency
+        atmosphere_max_plasma_frequency_squared
     )
 
-    a = calculate_param_a(*atmosphere_params)
-    b = calculate_param_b(*atmosphere_params)
-    c = calculate_param_c(launch_angle, *atmosphere_params)
+    a = calculate_param_a(operating_frequency, *atmosphere_params)
+    b = calculate_param_b(operating_frequency, *atmosphere_params)
+    c = calculate_param_c(launch_angle, operating_frequency, *atmosphere_params)
 
     discriminant = b ** 2 - (4 * a * c)
 
@@ -195,6 +197,7 @@ def get_apogee_height(
 def get_qp_ground_distances(
         launch_angle: float,
         heights: np.ndarray,
+        operating_frequency,
         *atmosphere_params) -> np.ndarray:
     """
     NOTE: THIS FUNCTION IS THE ONLY UNTESTED FUNCTION.
@@ -204,7 +207,8 @@ def get_qp_ground_distances(
     Gets the ground distances of a ray path in the qp atmosphere.
     See equation 6 in Hill 1979
     :param launch_angle: launch angle of the path
-    :param heights: array of heights for which path ground distances will be computed.
+    :param heights: array of heights for which path ground distances will be computed
+    :param operating_frequency: see get_quasi_parabolic_path.
     :param atmosphere_params: parameters describing the atmosphere. See get_quasi_parabolic_path
     :return: the ground distances of the path as an array of size (N, ) where array elements are in meters
              There are 2 possible ground distances for every height. These ground distances calculated as the shortest
@@ -212,9 +216,9 @@ def get_qp_ground_distances(
     """
     atmosphere_base_height = atmosphere_params[1]
 
-    a = calculate_param_a(*atmosphere_params)
-    b = calculate_param_b(*atmosphere_params)
-    c = calculate_param_c(launch_angle, *atmosphere_params)
+    a = calculate_param_a(operating_frequency, *atmosphere_params)
+    b = calculate_param_b(operating_frequency, *atmosphere_params)
+    c = calculate_param_c(launch_angle, operating_frequency, *atmosphere_params)
 
     if b ** 2 - (4 * a * c) <= 0:
         raise ValueError("Parameters are not valid. "
@@ -241,18 +245,20 @@ def get_qp_ground_distances(
 
 def get_apogee_ground_distance(
         launch_angle: float,
-        *atmosphere_params) -> np.ndarray:
+        operating_frequency: float,
+        *atmosphere_params: float) -> np.ndarray:
     """
     Gets the path in the qp atmosphere
     :param launch_angle: launch angle of the path
+    :param operating_frequency: see get_quasi_parabolic_path
     :param atmosphere_params: parameters defining the atmosphere
     :return: the ground distances of the path as an array of size (N, )
     where array elements are ground distances in meters
     """
     atmosphere_base_height = atmosphere_params[1]
-    a = calculate_param_a(*atmosphere_params)
-    b = calculate_param_b(*atmosphere_params)
-    c = calculate_param_c(launch_angle, *atmosphere_params)
+    a = calculate_param_a(operating_frequency, *atmosphere_params)
+    b = calculate_param_b(operating_frequency, *atmosphere_params)
+    c = calculate_param_c(launch_angle, operating_frequency, *atmosphere_params)
 
     discriminant = b ** 2 - (4 * a * c)
 
@@ -275,18 +281,20 @@ def get_apogee_ground_distance(
 def get_qp_heights(
         launch_angle: float,
         ground_distances: np.ndarray,
+        operating_frequency: float,
         *atmosphere_params: float) -> np.ndarray:
     """
     Gets the heights of a ray path in the qp atmosphere.
     See equation 11 in Hill 1979
     :param launch_angle: launch angle of the path
     :param ground_distances: array of ground distances for which path height will be computed
+    :param operating_frequency: see get_quasi_parabolic_path
     :return: the height of the path as an array of size (N, ) where array elements are heights in meters
     """
     atmosphere_base_height = atmosphere_params[1]
-    a = calculate_param_a(*atmosphere_params)
-    b = calculate_param_b(*atmosphere_params)
-    c = calculate_param_c(launch_angle, *atmosphere_params)
+    a = calculate_param_a(operating_frequency, *atmosphere_params)
+    b = calculate_param_b(operating_frequency, *atmosphere_params)
+    c = calculate_param_c(launch_angle, operating_frequency, *atmosphere_params)
     beta_b = calculate_param_beta_b(launch_angle, atmosphere_base_height)
     x_b = calculate_param_x_b(launch_angle, atmosphere_base_height)
 
@@ -294,7 +302,7 @@ def get_qp_heights(
         raise ValueError("Parameters are not valid. "
                          "In the given configuration, the ray will never return to the ground")
 
-    middle_distance = get_apogee_ground_distance(launch_angle, *atmosphere_params)
+    middle_distance = get_apogee_ground_distance(launch_angle, operating_frequency, *atmosphere_params)
     ground_distances_unified = np.where(
         ground_distances <= middle_distance,
         ground_distances,
@@ -330,10 +338,10 @@ def get_qp_heights(
 
 def get_quasi_parabolic_path(
         path_ground_distance: float,
+        operating_frequency: float,
         atmosphere_height_of_max: float,
         atmosphere_base_height: float,
-        atmosphere_max_e_density: float,
-        operating_frequency: float,
+        atmosphere_max_plasma_frequency_squared: float,
         step_size_horizontal: float = 5) -> np.ndarray:
     """
     This is the primary function to generate the
@@ -341,7 +349,7 @@ def get_quasi_parabolic_path(
     :param path_ground_distance: The length of the path along the earths surface (in meters)
     :param atmosphere_height_of_max: The point where the atmosphere is at its max density (r_m)
     :param atmosphere_base_height: The base of the atmosphere (r_b)
-    :param atmosphere_max_e_density: The e density of the atmosphere at its peak (N_m)
+    :param atmosphere_max_plasma_frequency_squared: The e density of the atmosphere at its peak (N_m)
     :param operating_frequency: the frequency of the ray (f)
     :param step_size_horizontal: step size between adjacent points in the path in meters
     :return: a tuple of possible paths (high, low), or (single) that make a valid path in the QP atmosphere
@@ -353,7 +361,7 @@ def get_quasi_parabolic_path(
 
     atmosphere_params = (
         atmosphere_height_of_max, atmosphere_base_height,
-        atmosphere_max_e_density, operating_frequency
+        atmosphere_max_plasma_frequency_squared, operating_frequency
     )
     try:
         angle_of_shortest_path = get_angle_of_shortest_path(*atmosphere_params)

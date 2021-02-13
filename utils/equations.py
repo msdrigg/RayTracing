@@ -45,21 +45,25 @@ def equation_13_prime(yp, x, y2, yt):
     return output
 
 
-def equation_14(yp, yp2, y2, fractions, yt):
+def equation_14(yp, yp_squared, y_squared, fractions, yt):
     """
     Equation 14 from Coleman 2011
     """
-    return yt / (yp - (y2 - yp2) * fractions * 0.5)
+    return yt / (yp - (y_squared - yp_squared) * fractions * 0.5)
 
 
-def equation_15(yp, x, y2):
+def equation_15(yp_squared, x, y_squared):
     """
     Equation 15 from Coleman 2011
     """
     # We choose ordinary ray in our calculation of mu2
-    yp2 = np.square(yp)
-    return 1 - 2 * x * (1 - x) / (2 * (1 - x) - (y2 - yp2) +
-                                  np.sqrt(np.square(y2 - yp2) + 4 * np.square(1 - x) * yp2))
+    one_minus_x = 1 - x
+    y_squared_minus_yp_squared = y_squared - yp_squared
+
+    denominator = 2 * one_minus_x - y_squared_minus_yp_squared + \
+        np.sqrt(np.square(y_squared_minus_yp_squared) + 4 * np.square(one_minus_x) * yp_squared)
+
+    return 1 - 2 * x * one_minus_x / denominator
 
 
 def equation_16(yp, yp2, x, y2):

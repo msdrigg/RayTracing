@@ -120,7 +120,7 @@ def standard_to_path_component(
     if from_spherical:
         path_components[:, 0] = spherical_vector[:, 0] - EARTH_RADIUS
     else:
-        path_components[:, 0] = linalg.norm(cartesian_components) - EARTH_RADIUS
+        path_components[:, 0] = linalg.norm(cartesian_components, axis=1) - EARTH_RADIUS
 
     return vector.flatten_if_necessary(path_components)
 

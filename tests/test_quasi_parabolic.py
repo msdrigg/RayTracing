@@ -45,7 +45,7 @@ class TestQuasiParabolicBaseParams(TestCase):
             atmosphere_params = (
                 instance["rm"], instance["rb"], instance["fc"] ** 2 / 80.62, instance["f"]
             )
-            test_a = qp.calculate_param_a(*atmosphere_params)
+            test_a = qp.calculate_param_a(,
             test_b = qp.calculate_param_b(*atmosphere_params)
             test_c = qp.calculate_param_c(instance["beta0"], *atmosphere_params)
             test_betab = qp.calculate_param_beta_b(instance["beta0"], instance["rb"])
@@ -396,12 +396,11 @@ class TestQuasiParabolicBaseParams(TestCase):
                 (self.atmosphere_4, math.pi/50*coords.EARTH_RADIUS, (self.atm_4_height_results_1,))]:
             if expected_results is None:
                 with self.assertRaises(ValueError):
-                    qp.get_quasi_parabolic_path(ground_distance, *atmosphere)
+                    qp.get_quasi_parabolic_path(ground_distance,,
             else:
                 point_count = len(expected_results[0])
 
-                result_paths = qp.get_quasi_parabolic_path(ground_distance, *atmosphere,
-                                                           step_size_horizontal=ground_distance/(point_count - 1))
+                result_paths = qp.get_quasi_parabolic_path(ground_distance,,
                 self.assertTrue(len(result_paths) == len(expected_results), "Gotten {} paths but expected {}"
                                 .format(len(result_paths), len(expected_results)))
 
@@ -417,8 +416,7 @@ class TestQuasiParabolicBaseParams(TestCase):
                 (self.atmosphere_4, math.pi/50*coords.EARTH_RADIUS, (self.atm_4_height_results_1,))]:
             if expected_results is not None:
                 point_count = len(expected_results[0])
-                result_paths = qp.get_quasi_parabolic_path(ground_distance, *atmosphere,
-                                                           step_size_horizontal=ground_distance/(point_count - 1))
+                result_paths = qp.get_quasi_parabolic_path(ground_distance,,
                 names = ("High", "Low")
                 colors = ("black", "white")
                 frequency = atmosphere[3]

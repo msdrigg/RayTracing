@@ -1,36 +1,42 @@
+"""
+This file implements the chapman layers atmosphere.
+To see the required atmosphere function definitions look at atmosphere.base
+"""
+
+from numpy.typing import *
 import numpy as np
-from utils import coordinates as coords
 import typing
 
 
-def to_chapman_params(*qp_params: float) -> typing.Tuple:
-    atmosphere_height_of_max, atmosphere_base_height, \
-        atmosphere_maximum_e_density, operating_frequency = qp_params
-
-    return atmosphere_height_of_max, atmosphere_height_of_max - atmosphere_base_height, \
-        atmosphere_maximum_e_density, operating_frequency
-
-
-def e_density_helper(heights: np.ndarray, *atmosphere_params: float) -> np.ndarray:
+def get_qp_parameters(*atmosphere_params: float) -> typing.Tuple[float, ...]:
     """
-    // NOTE: UNTESTED
-    Returns the e density as a numpy array for the given heights. Heights are measured from origin not surface
-    :param heights: array of heights as measured from the surface of the earth
-    :returns: array of plasma frequency at given heights
+    Because we use qp path for initialization, we need a method to calculate the qp parameters from any atmosphere's
+    parameters.
+    :returns: A tuple
+    (atmosphere_height_of_max, atmosphere_base_height, atmosphere_max_gyro_frequency) (all floats)
     """
-    radii = heights + coords.EARTH_RADIUS
-    atmosphere_height_of_max, atmosphere_base_height, atmosphere_max_e_density, operating_frequency = atmosphere_params
+    return atmosphere_params
+
+
+def calculate_plasma_frequency(position_vector: ArrayLike,
+                               norm_vector: ArrayLike,
+                               *atmosphere_params) -> np.ndarray:
+    """
+    Follows the description in atmosphere.base to calculate plasma frequency for given positions
+    """
+    atmosphere_height_of_max, atmosphere_base_height, max_plasma_frequency = atmosphere_params
     semi_width = atmosphere_height_of_max - atmosphere_base_height
 
-    term_2_numerator = (radii - atmosphere_height_of_max) * atmosphere_base_height
-    term_2_denominator = semi_width * radii
+    term_2_numerator = (norm_vector - atmosphere_height_of_max) * atmosphere_base_height
+    term_2_denominator = semi_width * norm_vector
     term_2 = np.square(term_2_numerator / term_2_denominator)
 
-    in_atmosphere_density = atmosphere_max_e_density * (1 - term_2)
+    in_atmosphere_plasma_frequency = max_plasma_frequency * (1 - term_2)
 
     return np.where(
-        (atmosphere_base_height < radii) & (atmosphere_base_height * atmosphere_height_of_max /
-                                            (atmosphere_base_height - semi_width) > radii),
-        atmosphere_max_e_density * in_atmosphere_density,
+        (atmosphere_base_height < norm_vector) &
+        (atmosphere_base_height * atmosphere_height_of_max /
+         (atmosphere_base_height - semi_width) > norm_vector),
+        in_atmosphere_plasma_frequency,
         0
     )

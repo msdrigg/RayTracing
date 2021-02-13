@@ -1,26 +1,36 @@
-from utils import coordinates as coords
-import typing
+"""
+This file implements the chapman layers atmosphere.
+To see the required atmosphere function definitions look at atmosphere.base
+"""
+
+from numpy.typing import *
 import numpy as np
+import typing
 
 
-def calculate_e_density(heights, *atmosphere_params: float) -> np.ndarray:
+def calculate_plasma_frequency_squared(
+        position_vector: ArrayLike,
+        norms: ArrayLike = None,
+        *chapman_params) -> np.ndarray:
     """
-    Returns the chapman layers e density given points in path_component format and
-    atmosphere_params
-    :param heights: Array of heights as measured above the center of the earth
-    :param atmosphere_params: a tuple of (atmosphere_height_of_max, atmosphere_semi_width, atmosphere_maximum_e_density)
-    :return: Array of e densities given the chapman layers point
+    This function calculates the plasma frequency of the atmosphere at different points.
+    This follows
+    See atmosphere.base for a more detailed description
     """
-    atmosphere_height_of_max, atmosphere_semi_width, \
-        atmosphere_maximum_e_density, operating_frequency = atmosphere_params
-    z1 = ((heights + coords.EARTH_RADIUS) - atmosphere_height_of_max) / atmosphere_semi_width
+    # Equation, but with an additional factor of 2. I have adjusted to add this factor of 2 because without it,
+    # we are only matching ion_production, not electron density.
+    # www.uio.no/studier/emner/matnat/fys/nedlagte-emner/FYS3610/h04/undervisningsmateriale/Chapter%204-25August.pdf
+    atmosphere_height_of_max, atmosphere_semi_width, maximum_plasma_frequency_squared = chapman_params
 
-    return atmosphere_maximum_e_density * np.exp((1 - z1 - np.exp(-z1)))
+    z1 = (norms - atmosphere_height_of_max) / atmosphere_semi_width
+
+    return maximum_plasma_frequency_squared * np.exp((1 - (z1 + np.exp(-z1))) / 2)
 
 
-def to_qp_params(*chapman_params: float) -> typing.Tuple:
-    atmosphere_height_of_max, atmosphere_semi_width, \
-        atmosphere_maximum_e_density, operating_frequency = chapman_params
+def get_qp_parameters(*atmosphere_params: float) -> typing.Tuple[float, ...]:
+    """
+    This method calculates qp parameters. See atmosphere.base for a more detailed description
+    """
+    atmosphere_height_of_max, atmosphere_semi_width, maximum_gyro_frequency = atmosphere_params
 
-    return atmosphere_height_of_max, atmosphere_height_of_max - atmosphere_semi_width, \
-        atmosphere_maximum_e_density, operating_frequency
+    return atmosphere_height_of_max, atmosphere_height_of_max - atmosphere_semi_width, maximum_gyro_frequency

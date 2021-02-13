@@ -1,41 +1,45 @@
-from utils import constants, coordinates as coords
+from utils import constants, vector
 import numpy as np
+from utils.constants import STANDARD_MAGNETIC_FIELD_MAXIMUM as B_MAX
+from utils.constants import EARTH_RADIUS_CUBED
+from numpy.typing import *
 
 
-def field_vec(heights, z_component):
-    # radii cubed is 1/r^3 for all r
-    radii_cubed = np.power(heights[:, 0] + coords.EARTH_RADIUS, 3)
-    cos_thetas = z_component/heights
-    b_vec = -2 * self.b_max * radii_cubed.reshape(-1, 1) * constants.re3 * cos_thetas.reshape(-1, 1) * unit_radius(
-        position) - \
-            self.b_max * self.re3 * radii_cubed.reshape(-1, 1) * sin(position[:, 1]).reshape(-1, 1) * unit_theta(
-        position)
-    b_vec = unit_vector(b_vec)
-
-    if len(b_vec) == 1:
-        return b_vec[0]
-    else:
-        return b_vec
-
-
-def field_mag(self, position, using_spherical=False):
-    if not using_spherical:
-        position = cartesian_to_spherical(position).reshape(-1, 3)
-    # radii cubed is 1/r^3 for all r
-    radii_cubed = power(position[:, 0], -3)
-    cos_thetas = cos(position[:, 1])
-    b_mags = self.b_max * self.re3 * radii_cubed * sqrt(1 + 3 * square(cos_thetas))
-    if len(b_mags) == 1:
-        return b_mags[0]
-    else:
-        return b_mags
-
-
-def gyro_frequency(self, position, using_spherical=False):
+def calculate_gyro_frequency(
+        position_vector: ArrayLike,
+        norms: ArrayLike = None) -> np.ndarray:
     """
-    This function returns the gyro frequency at the given point using the class's defined functions for
-    b_factor and field_mag
+    This function calculates the gyro frequency at the provided points
+    :param position_vector: This is an array of shape (N, 3) whose rows contain cartesian coordinates
+    :param norms: This is an array of shape (N,) whose elements are the norms of the corresponding cartesian points
+    This parameter is an optional speed up to reduce the repeated calculating of norms.
+    :returns: A vector whose elements are the gyro frequency evaluated at the provided cartesian coordinates
     """
-    if using_spherical:
-        position = spherical_to_cartesian(position)
-    return constants.B_FACTOR * self.field_mag(position)
+    radii_cubed = np.power(norms, -3)
+    cos_thetas = position_vector[:, 2] / norms
+    
+    field_magnitude = B_MAX * EARTH_RADIUS_CUBED * radii_cubed * np.sqrt(1 + 3 * np.square(cos_thetas))
+
+    return constants.B_FACTOR * field_magnitude
+
+
+def calculate_magnetic_field_unit_vec(
+        position_vector: ArrayLike,
+        norms: ArrayLike = None) -> np.ndarray:
+    """
+    This function calculates the unit magnetic field vector (magnitude 1) at different points.
+    We split this up with the previous function to optimize it. See the equation for B(r) in
+    https://en.wikipedia.org/wiki/Magnetic_dipole for equation
+    :param position_vector: This is an array of shape (N, 3) whose rows contain cartesian coordinates
+    :param norms: This is an array of shape (N,) whose elements are the norms of the corresponding cartesian points
+    This parameter is an optional speed up to reduce the repeated calculating of norms.
+    :returns: A (N, 3) array whose rows are the magnetic field vectors in cartesian coordinates
+    """
+    unit_position_vectors = position_vector / norms
+
+    # We are optimizing here because we know that the unit_magnetic_moment of earth's magnetic field is
+    # -z_hat. Because the north-south pole confusion.
+    field_vector = -3 * unit_position_vectors * unit_position_vectors[:, 2]
+    field_vector[:, 2] -= 1
+
+    return vector.normalize_rows(field_vector)
