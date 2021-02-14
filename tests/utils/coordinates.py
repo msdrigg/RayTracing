@@ -169,32 +169,3 @@ class TestCoordinates(TestCase):
                 point_path_pair[0],
                 coordinates.regularize_spherical_coordinates(spherical)
             )
-
-
-class TestHelpers(TestCase):
-    vec1 = np.array([
-        [1, 2, 3], [5, 5, 5], [2, 3, 4]
-    ])
-    vec2 = np.array([
-        [1, 0, -1], [5, 2, 2], [2, 3, 0]
-    ])
-    vec3 = np.array([0, 1, 2])
-
-    def test_row_dot_product(self):
-        for vec in [self.vec1, self.vec2, self.vec3]:
-            np.testing.assert_array_almost_equal(
-                coordinates.row_dot_product(
-                    vec, vec
-                ),
-                np.square(np.linalg.norm(np.atleast_2d(vec), axis=1))
-            )
-        for vec_triple in [
-            (np.array([-2, 45, 13]), self.vec1, self.vec2),
-            (np.array([-2, 6, 3]), self.vec3, self.vec2)
-        ]:
-            np.testing.assert_array_almost_equal(
-                coordinates.row_dot_product(
-                    vec_triple[1], vec_triple[2]
-                ),
-                vec_triple[0]
-            )

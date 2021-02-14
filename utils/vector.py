@@ -3,6 +3,7 @@ General utils to help with vectorized calculations
 """
 import numpy as np
 from scipy import linalg
+import warnings
 
 
 def row_dot_product(a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -23,6 +24,8 @@ def normalize_single_vector(a: np.ndarray) -> np.ndarray:
     :param a: A vector of shape (N, )
     :return: A vector of shape (N, ) parallel to a with unit length
     """
+    norm = linalg.norm(a)
+
     return a / linalg.norm(a)
 
 
@@ -32,7 +35,16 @@ def normalize_rows(a: np.ndarray) -> np.ndarray:
     :param a: An array of shape (N, M)
     :return: A vector of shape (N, M), where each row is unit length and parallel to the row in the original vector
     """
-    return a / linalg.norm(a, axis=1)
+    norm = linalg.norm(a, axis=-1)
+    zero_parts = norm == 0
+    if np.any(zero_parts):
+        warnings.warn(RuntimeWarning(
+            "Attempting to normalize a 0 vector. "
+            "Returning 0 vector on rows instead of infinity"
+        ))
+        norm[zero_parts] = 1
+
+    return a / norm
 
 
 def flatten_if_necessary(vecs: np.ndarray) -> np.ndarray:
