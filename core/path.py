@@ -8,7 +8,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 from scipy import interpolate
 
-from utils import coordinates as coords
+from core import coordinates as coords
 
 
 def _interpolate_multidimensional(

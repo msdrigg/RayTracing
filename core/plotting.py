@@ -3,7 +3,7 @@ Plotting functions
 """
 from matplotlib import pyplot as plt
 import numpy as np
-from utils import coordinates as coords
+from core import vector, coordinates as coords
 import typing
 import math
 from scipy import integrate
@@ -85,9 +85,10 @@ def visualize_atmosphere(plasma_frequency_function: typing.Callable[[np.ndarray]
     :returns: If show is True, it returns the figure and axes. Otherwise it will return nothing.
     """
     default_height = 400E3
-    total_angle = math.acos(np.dot(coords.spherical_to_cartesian(initial_point),
-                            coords.spherical_to_cartesian(final_point)) /
-                            (np.linalg.norm(initial_point) * np.linalg.norm(final_point)))
+    total_angle = vector.angle_between_vector_collections(
+        coords.spherical_to_cartesian(initial_point),
+        coords.spherical_to_cartesian(final_point)
+    ).item()
     path_component_vector = np.empty((point_number, 3))
     path_component_vector[:, 0] = 1
     path_component_vector[:, 1] = np.linspace(0, 1, point_number) * total_angle * coords.EARTH_RADIUS
@@ -207,7 +208,6 @@ def visualize_points(points: dict, fig=None, ax=None, show=True):
         for ctr, dim in zip(centers, 'xyz'):
             getattr(old_ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
 
-    print(points)
     for label in points.keys():
         point = points[label]
         ax.scatter(*point.tolist())

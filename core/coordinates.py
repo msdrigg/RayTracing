@@ -6,11 +6,9 @@ import warnings
 from scipy import linalg
 import numpy as np
 from scipy.spatial.transform import Rotation
-from utils import vector
+from core import vector
 from typing import Optional
-
-# Earth radius meters. DO NOT EDIT
-EARTH_RADIUS: float = 6.371E6
+from core.constants import EARTH_RADIUS
 
 
 # This takes geographic as a numpy vector of coordinates, or single coordinates
@@ -32,7 +30,7 @@ def geographic_to_spherical(geographic: np.ndarray) -> np.ndarray:
     spherical[:, 1] = (90 + geographic_vectorized[:, 0]) * math.pi / 180
     spherical[:, 2] = geographic_vectorized[:, 1] * math.pi / 180
 
-    return vector.flatten_if_necessary(spherical)
+    return spherical
 
 
 # This performs the inverse of geographic_to_spherical
@@ -51,7 +49,7 @@ def spherical_to_geographic(spherical: np.ndarray) -> np.ndarray:
     geographic[:, 1] = spherical_vectorized[:, 2] * 180 / math.pi
     geographic[:, 2] = spherical_vectorized[:, 0] - EARTH_RADIUS
 
-    return vector.flatten_if_necessary(geographic)
+    return geographic
 
 
 def spherical_to_cartesian(spherical: np.ndarray) -> np.ndarray:
@@ -65,7 +63,7 @@ def spherical_to_cartesian(spherical: np.ndarray) -> np.ndarray:
     cartesian_vector[:, 1] = spherical_vector[:, 0] * np.sin(spherical_vector[:, 1]) * np.sin(spherical_vector[:, 2])
     cartesian_vector[:, 2] = spherical_vector[:, 0] * np.cos(spherical_vector[:, 1])
 
-    return vector.flatten_if_necessary(cartesian_vector)
+    return cartesian_vector
 
 
 def cartesian_to_spherical(cartesian: np.ndarray) -> np.ndarray:
@@ -80,7 +78,7 @@ def cartesian_to_spherical(cartesian: np.ndarray) -> np.ndarray:
     spherical_vector[:, 1] = np.arccos(cartesian_vector[:, 2] / r)
     spherical_vector[:, 2] = np.arctan2(cartesian_vector[:, 1], cartesian_vector[:, 0])
 
-    return vector.flatten_if_necessary(spherical_vector)
+    return spherical_vector
 
 
 # Converts a spherical coordinate to a coordinate in the form of
@@ -107,8 +105,8 @@ def standard_to_path_component(
         spherical_vector = np.empty(1)
 
     # Path start and end
-    cartesian_start = spherical_to_cartesian(path_start_spherical)
-    cartesian_end = spherical_to_cartesian(path_end_spherical)
+    cartesian_start = spherical_to_cartesian(path_start_spherical).squeeze()
+    cartesian_end = spherical_to_cartesian(path_end_spherical).squeeze()
 
     path_components = np.empty_like(cartesian_components, dtype=float)
 
@@ -138,7 +136,7 @@ def standard_to_path_component(
     else:
         path_components[:, 0] = linalg.norm(cartesian_components, axis=1) - EARTH_RADIUS
 
-    return vector.flatten_if_necessary(path_components)
+    return path_components
 
 
 def path_component_to_standard(
@@ -191,7 +189,7 @@ def path_component_to_standard(
     spherical_components = np.atleast_2d(cartesian_to_spherical(cartesian_components))
 
     spherical_components[:, 0] = path_components_vector[:, 0] + EARTH_RADIUS
-    return vector.flatten_if_necessary(spherical_components)
+    return spherical_components
 
 
 def regularize_spherical_coordinates(coordinates: np.ndarray) -> np.ndarray:
@@ -202,4 +200,4 @@ def regularize_spherical_coordinates(coordinates: np.ndarray) -> np.ndarray:
     """
     regularized = np.atleast_2d(cartesian_to_spherical(spherical_to_cartesian(coordinates)))
     regularized[:, 2] = np.mod(regularized[:, 2] + 2 * math.pi, 2 * math.pi)
-    return vector.flatten_if_necessary(regularized)
+    return regularized

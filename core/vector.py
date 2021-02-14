@@ -1,5 +1,5 @@
 """
-General utils to help with vectorized calculations
+General core to help with vectorized calculations
 """
 import numpy as np
 from scipy import linalg
@@ -18,25 +18,15 @@ def row_dot_product(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.einsum('ij,ij->i', np.atleast_2d(a), np.atleast_2d(b))
 
 
-def normalize_single_vector(a: np.ndarray) -> np.ndarray:
-    """
-    Normalized the provided vector
-    :param a: A vector of shape (N, )
-    :return: A vector of shape (N, ) parallel to a with unit length
-    """
-    norm = linalg.norm(a)
-
-    return a / linalg.norm(a)
-
-
 def normalize_rows(a: np.ndarray) -> np.ndarray:
     """
     Normalized the provided vector row-wise
     :param a: An array of shape (N, M)
     :return: A vector of shape (N, M), where each row is unit length and parallel to the row in the original vector
     """
-    norm = linalg.norm(a, axis=-1)
+    norm = np.asarray(linalg.norm(a, axis=-1))
     zero_parts = norm == 0
+
     if np.any(zero_parts):
         warnings.warn(RuntimeWarning(
             "Attempting to normalize a 0 vector. "
@@ -44,19 +34,7 @@ def normalize_rows(a: np.ndarray) -> np.ndarray:
         ))
         norm[zero_parts] = 1
 
-    return a / norm
-
-
-def flatten_if_necessary(vecs: np.ndarray) -> np.ndarray:
-    """
-    If vecs is of shape (1, N), flatten it to (N, )
-    :param vecs: An array of shape (M, N)
-    :return: An array of shape (M, N) or (N, ) depending on whether M is 1 or not
-    """
-    if vecs.shape[0] == 1:
-        return vecs.flatten()
-    else:
-        return vecs
+    return a / norm[..., np.newaxis]
 
 
 def angle_between_vector_collections(vec1: np.ndarray, vec2: np.ndarray) -> np.ndarray:
@@ -66,5 +44,10 @@ def angle_between_vector_collections(vec1: np.ndarray, vec2: np.ndarray) -> np.n
     :param vec2: vector of shape (N, M)
     :return: angles between collections in array of shape (N, )
     """
-    return np.arccos(row_dot_product(vec1, vec2) / (
-            linalg.norm(vec2, axis=1) * linalg.norm(vec1, axis=1)))
+    if vec1.ndim > 2 or vec2.ndim > 2:
+        raise ValueError("Vectors need to have 1 or 2 dimensions")
+    if vec1.shape[-1] != vec2.shape[-1] or vec1.shape[-1] < 2 or vec2.shape[-1] < 2:
+        raise ValueError("Vectors have unequal shape in their last axes: {}, {}"
+                         .format(vec1.shape[-1], vec2.shape[-1]))
+    return np.arccos(np.clip(row_dot_product(vec1, vec2) / (
+            linalg.norm(vec2, axis=-1) * linalg.norm(vec1, axis=-1)), -1.0, 1.0))

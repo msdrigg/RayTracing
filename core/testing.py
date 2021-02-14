@@ -1,5 +1,5 @@
 """
-General testing utils
+General testing core
 """
 import math
 

@@ -1,5 +1,8 @@
+"""
+Testing functions from test_core.coordinates
+"""
 from unittest import TestCase
-from utils import coordinates
+from core import coordinates
 import math
 import numpy as np
 
@@ -21,30 +24,30 @@ class TestCoordinates(TestCase):
 
     def test_spherical_to_geographic(self):
         tested_func = coordinates.spherical_to_geographic
-        np.testing.assert_array_almost_equal(tested_func(self.spherical_1), self.geographic_1)
-        np.testing.assert_array_almost_equal(tested_func(self.spherical_2), self.geographic_2)
+        np.testing.assert_array_almost_equal(tested_func(self.spherical_1).squeeze(), self.geographic_1)
+        np.testing.assert_array_almost_equal(tested_func(self.spherical_2).squeeze(), self.geographic_2)
         with self.assertWarns(RuntimeWarning):
             tested_func(self.spherical_fail)
 
     def test_geographic_to_spherical(self):
         tested_func = coordinates.geographic_to_spherical
-        np.testing.assert_array_almost_equal(tested_func(self.geographic_1), self.spherical_1)
-        np.testing.assert_array_almost_equal(tested_func(self.geographic_2), self.spherical_2)
+        np.testing.assert_array_almost_equal(tested_func(self.geographic_1).squeeze(), self.spherical_1)
+        np.testing.assert_array_almost_equal(tested_func(self.geographic_2).squeeze(), self.spherical_2)
         with self.assertWarns(RuntimeWarning):
             tested_func(self.geographic_fail)
 
     def test_cartesian_to_spherical(self):
         tested_func = coordinates.cartesian_to_spherical
         regularize = coordinates.regularize_spherical_coordinates
-        np.testing.assert_array_almost_equal(regularize(tested_func(self.cartesian_1)),
-                                             regularize(self.spherical_1))
-        np.testing.assert_array_almost_equal(regularize(tested_func(self.cartesian_2)),
-                                             regularize(self.spherical_2))
+        np.testing.assert_array_almost_equal(regularize(tested_func(self.cartesian_1)).squeeze(),
+                                             regularize(self.spherical_1).squeeze())
+        np.testing.assert_array_almost_equal(regularize(tested_func(self.cartesian_2)).squeeze(),
+                                             regularize(self.spherical_2).squeeze())
 
     def test_spherical_to_cartesian(self):
         tested_func = coordinates.spherical_to_cartesian
-        np.testing.assert_array_almost_equal(tested_func(self.spherical_1), self.cartesian_1)
-        np.testing.assert_array_almost_equal(tested_func(self.spherical_2), self.cartesian_2)
+        np.testing.assert_array_almost_equal(tested_func(self.spherical_1).squeeze(), self.cartesian_1)
+        np.testing.assert_array_almost_equal(tested_func(self.spherical_2).squeeze(), self.cartesian_2)
 
     def test_regularize_spherical_coordinates(self):
         for test_coord in [self.spherical_1, self.spherical_2]:
@@ -53,8 +56,8 @@ class TestCoordinates(TestCase):
             np.testing.assert_array_less(np.atleast_2d(regularized)[:, 1], math.pi)
             np.testing.assert_array_less(np.atleast_2d(regularized)[:, 2], 2 * math.pi)
             np.testing.assert_array_compare(np.greater_equal, regularized, 0)
-            np.testing.assert_array_almost_equal(coordinates.spherical_to_cartesian(regularized),
-                                                 coordinates.spherical_to_cartesian(test_coord))
+            np.testing.assert_array_almost_equal(coordinates.spherical_to_cartesian(regularized).squeeze(),
+                                                 coordinates.spherical_to_cartesian(test_coord).squeeze())
 
     path_start_1 = np.array([coordinates.EARTH_RADIUS, math.pi / 2, math.pi / 2])
     path_end_1 = np.array([coordinates.EARTH_RADIUS, math.pi / 2, math.pi])
@@ -116,7 +119,7 @@ class TestCoordinates(TestCase):
             np.testing.assert_allclose(
                 coordinates.standard_to_path_component(
                     spherical, *path
-                ),
+                ).squeeze(),
                 path_comp,
                 rtol=1e-7, atol=0.01
             )
@@ -124,10 +127,10 @@ class TestCoordinates(TestCase):
             np.testing.assert_allclose(
                 coordinates.spherical_to_cartesian(coordinates.path_component_to_standard(
                     path_comp, *path
-                )),
+                )).squeeze(),
                 coordinates.spherical_to_cartesian(
                     spherical
-                ),
+                ).squeeze(),
                 rtol=1e-7, atol=0.01
             )
 
@@ -136,27 +139,29 @@ class TestCoordinates(TestCase):
             washed_coordinate = coordinates.path_component_to_standard(path_comp, path[0], path[1])
 
             np.testing.assert_allclose(
-                coordinates.spherical_to_cartesian(washed_coordinate),
-                coordinates.spherical_to_cartesian(vecs),
+                coordinates.spherical_to_cartesian(washed_coordinate).squeeze(),
+                coordinates.spherical_to_cartesian(vecs).squeeze(),
                 rtol=1e-7, atol=0.01
             )
 
     def test_spherical_to_path_component(self):
         for point_path_pair in self.coords_paths_paths:
             path = point_path_pair[1]
-            for coordinate in [self.spherical_1, self.spherical_3, self.spherical_4, self.spherical_2[0], self.spherical_2[1]]:
+            for coordinate in [self.spherical_1, self.spherical_3,
+                               self.spherical_4, self.spherical_2[0],
+                               self.spherical_2[1]]:
                 path_comp = coordinates.standard_to_path_component(coordinate, path[1], path[2])
                 washed_coordinate = coordinates.path_component_to_standard(path_comp, path[1], path[2])
 
                 np.testing.assert_allclose(
-                    coordinates.spherical_to_cartesian(washed_coordinate),
-                    coordinates.spherical_to_cartesian(coordinate),
+                    coordinates.spherical_to_cartesian(washed_coordinate).squeeze(),
+                    coordinates.spherical_to_cartesian(coordinate).squeeze(),
                     rtol=1e-9, atol=0.01
                 )
 
             np.testing.assert_allclose(
-                path[0],
-                coordinates.standard_to_path_component(point_path_pair[0], path[1], path[2]),
+                path[0].squeeze(),
+                coordinates.standard_to_path_component(point_path_pair[0], path[1], path[2]).squeeze(),
                 rtol=1e-7, atol=0.01
             )
 
@@ -167,5 +172,5 @@ class TestCoordinates(TestCase):
             spherical = coordinates.path_component_to_standard(*path)
             np.testing.assert_allclose(
                 point_path_pair[0],
-                coordinates.regularize_spherical_coordinates(spherical)
+                coordinates.regularize_spherical_coordinates(spherical).squeeze()
             )

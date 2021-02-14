@@ -6,7 +6,7 @@ You can also change the atmosphere used by manually passing the correct 'calcula
 to the trace() call. The required atmosphere functions are described in atmosphere.base and magnetic.base
 """
 import numpy as np
-from utils import tracing, coordinates as coords
+from core import tracing, coordinates as coords
 
 # List of module names for magnetic fields
 IMPLEMENTED_MAGNETIC_FIELDS = [

@@ -8,7 +8,7 @@ I will cite each equation as it comes from that paper.
 
 import numpy as np
 from scipy import optimize
-from utils import coordinates as coords
+from core import coordinates as coords
 import math
 from typing import Tuple, Optional
 
@@ -118,7 +118,7 @@ def get_angle_of_shortest_path(operating_frequency: float, *atmosphere_params: f
     shortest QP path
     """
     try:
-        pedersen_angle = get_pedersen_angle(*atmosphere_params)
+        pedersen_angle = get_pedersen_angle(operating_frequency, *atmosphere_params)
         result, _ = optimize.bisect(lambda a: ground_distance_derivative(a, operating_frequency, *atmosphere_params),
                                     0, pedersen_angle - 1E-6,
                                     disp=True, full_output=True)
@@ -360,16 +360,18 @@ def get_quasi_parabolic_path(
         raise RuntimeError(f"You are using {path_ground_distance} as your ground distance in meters"
                            "Please use a reasonable ground distance in meters.")
 
-    atmosphere_params = (
-        atmosphere_height_of_max, atmosphere_base_height,
-        atmosphere_max_plasma_frequency_squared, operating_frequency
+    ray_and_atmosphere_params = (
+        operating_frequency,
+        atmosphere_height_of_max,
+        atmosphere_base_height,
+        atmosphere_max_plasma_frequency_squared
     )
     try:
-        angle_of_shortest_path = get_angle_of_shortest_path(*atmosphere_params)
+        angle_of_shortest_path = get_angle_of_shortest_path(*ray_and_atmosphere_params)
     except ValueError:
         angle_of_shortest_path = math.pi/2
 
-    shortest_ground_distance = get_apogee_ground_distance(angle_of_shortest_path, *atmosphere_params) * 2
+    shortest_ground_distance = get_apogee_ground_distance(angle_of_shortest_path, *ray_and_atmosphere_params) * 2
     if shortest_ground_distance > path_ground_distance:
         raise ValueError("Shortest ground distance possible in this atmosphere "
                          "({}) is greater than the required ground distance {}"
@@ -378,10 +380,10 @@ def get_quasi_parabolic_path(
     angle_calculation_intervals = ()
     epsilon = 1E-7
     try:
-        angle_of_shortest_path = get_angle_of_shortest_path(*atmosphere_params)
+        angle_of_shortest_path = get_angle_of_shortest_path(*ray_and_atmosphere_params)
         angle_calculation_intervals += (
             (angle_of_shortest_path + epsilon,
-             get_pedersen_angle(*atmosphere_params) - epsilon),
+             get_pedersen_angle(*ray_and_atmosphere_params) - epsilon),
         )
         angle_calculation_intervals += ((0 + epsilon, angle_of_shortest_path - epsilon), )
     except ValueError:
@@ -396,7 +398,7 @@ def get_quasi_parabolic_path(
         launch_angle will be the angle for that desired path
         :return: The result of apogee_distance = expected_distance/2
         """
-        return get_apogee_ground_distance(launch_angle, *atmosphere_params) * 2 - path_ground_distance
+        return get_apogee_ground_distance(launch_angle, *ray_and_atmosphere_params) * 2 - path_ground_distance
 
     # Get path angles
     angles = ()
@@ -426,7 +428,7 @@ def get_quasi_parabolic_path(
     for angle in angles:
         full_vector = np.empty((distances.shape[0], 2))
         full_vector[:, 0] = distances
-        full_vector[:, 1] = get_qp_heights(angle, distances, *atmosphere_params)
+        full_vector[:, 1] = get_qp_heights(angle, distances, *ray_and_atmosphere_params)
         paths += full_vector,
 
     # Checking that these paths match desired results

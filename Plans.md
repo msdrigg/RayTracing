@@ -3,13 +3,17 @@ Outline of future changes.
 This will serve as a checklist for the project
 # Ongoing
 1. Test current algorithms
-    1. Repair test_quasi_parabolic
-        1. We changed the order of parameters, so some may need adjusting
-        2. We also switched to solely gyro_frequency^2 not e_density
-    2. Test all new utils
-    3. Test new plotting features
-    4. Test tracer
+    1. Test all new utils
+        1. Tests are 
+    2. Test new plotting features
+        1. Meaning 
+    3. Test tracer
 ## Testing
+### Unit testing
+Test all the new utils as well as the testable parts of 
+tracing.py
+
+### Integration Testing
 1. Retest the core functionality around the zero-field implementation
     1. Test solving perturbations of 
        QP solutions in QP atmosphere

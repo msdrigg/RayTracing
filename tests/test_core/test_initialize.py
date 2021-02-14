@@ -1,12 +1,16 @@
+"""
+Testing the initialization functions
+"""
 from unittest import TestCase
-from utils import coordinates as coords
-from utils import testing
+from core import coordinates as coords
+from core import testing, initialize
 import math
-from initialize import quasi_parabolic as qp
 import numpy as np
 from matplotlib import pyplot as plt
-from utils import plotting
+from core import plotting
 from atmosphere import quasi_parabolic as qp_atmosphere
+
+SHOULD_PLOT_GRAPHS = True
 
 
 class TestQuasiParabolicBaseParams(TestCase):
@@ -43,13 +47,14 @@ class TestQuasiParabolicBaseParams(TestCase):
         """
         for instance in [self.instance1, self.instance2]:
             atmosphere_params = (
-                instance["rm"], instance["rb"], instance["fc"] ** 2 / 80.62, instance["f"]
+                instance["rm"], instance["rb"], instance["fc"] ** 2
             )
-            test_a = qp.calculate_param_a(,
-            test_b = qp.calculate_param_b(*atmosphere_params)
-            test_c = qp.calculate_param_c(instance["beta0"], *atmosphere_params)
-            test_betab = qp.calculate_param_beta_b(instance["beta0"], instance["rb"])
-            test_xb = qp.calculate_param_x_b(instance["beta0"], instance["rb"])
+            operating_frequency = instance["f"]
+            test_a = initialize.calculate_param_a(operating_frequency, *atmosphere_params)
+            test_b = initialize.calculate_param_b(operating_frequency, *atmosphere_params)
+            test_c = initialize.calculate_param_c(instance["beta0"], operating_frequency, *atmosphere_params)
+            test_betab = initialize.calculate_param_beta_b(instance["beta0"], instance["rb"])
+            test_xb = initialize.calculate_param_x_b(instance["beta0"], instance["rb"])
 
             testing.assert_is_close(instance["a"], test_a, rel_tol=1E-6)
             testing.assert_is_close(instance["b"], test_b, rel_tol=1E-6)
@@ -57,27 +62,29 @@ class TestQuasiParabolicBaseParams(TestCase):
             testing.assert_is_close(instance["betab"], test_betab, rel_tol=1E-6)
             testing.assert_is_close(instance["xb"], test_xb, rel_tol=1E-6)
 
-    atmosphere_1 = (200E3 + coords.EARTH_RADIUS, 40E3 + coords.EARTH_RADIUS, 7E6**2 / 80.62, 10E6)
-    atmosphere_2 = (500E3 + coords.EARTH_RADIUS, 350E3 + coords.EARTH_RADIUS, 7E6**2 / 80.62, 10E6)
+    atmosphere_1 = (200E3 + coords.EARTH_RADIUS, 40E3 + coords.EARTH_RADIUS, 7E6**2, 10E6)
+    atmosphere_2 = (500E3 + coords.EARTH_RADIUS, 350E3 + coords.EARTH_RADIUS, 7E6**2, 10E6)
     atmosphere_3 = (
-        instance1["rm"], instance1["rb"], instance1["fc"] ** 2 / 80.62, instance1["f"]
+        instance1["rm"], instance1["rb"], instance1["fc"] ** 2, instance1["f"]
     )
     atmosphere_4 = (
-        instance2["rm"], instance2["rb"], instance2["fc"] ** 2 / 80.62, instance2["f"]
+        instance2["rm"], instance2["rb"], instance2["fc"] ** 2, instance2["f"]
     )
 
     def test_get_angle_of_shortest_path(self):
         """
         Tests get_angle_of_shortest_path
         """
-        for atmosphere, expected_result in [(self.atmosphere_1, 0.340804), (self.atmosphere_2, 0.613972),
-                                            (self.atmosphere_3, 0.280384), (self.atmosphere_4, None)]:
+        for system_params, expected_result in [(self.atmosphere_1, 0.340804), (self.atmosphere_2, 0.613972),
+                                               (self.atmosphere_3, 0.280384), (self.atmosphere_4, None)]:
+            frequency = system_params[3]
+            atmosphere_params = system_params[:3]
             if expected_result is None:
                 with self.assertRaises(ValueError):
-                    qp.get_angle_of_shortest_path(*atmosphere)
+                    initialize.get_angle_of_shortest_path(frequency, *atmosphere_params)
             else:
                 testing.assert_is_close(
-                    qp.get_angle_of_shortest_path(*atmosphere),
+                    initialize.get_angle_of_shortest_path(frequency, *atmosphere_params),
                     expected_result, rel_tol=1E-5
                 )
 
@@ -96,34 +103,49 @@ class TestQuasiParabolicBaseParams(TestCase):
             (0, -6.371e6)
         )
         # Testing raw derivative
-        for atmosphere, angle_params in [(self.atmosphere_1, test_angle_params_1),
-                                         (self.atmosphere_2, test_angle_params_2)]:
+        for system_params, angle_params in [(self.atmosphere_1, test_angle_params_1),
+                                            (self.atmosphere_2, test_angle_params_2)]:
+            atmosphere_params = system_params[:3]
+            operating_frequency = system_params[3]
             for angle, expected_derivative in angle_params:
-                testing.assert_is_close(qp.ground_distance_derivative(angle, *atmosphere),
-                                        expected_derivative, rel_tol=1E-6)
+                testing.assert_is_close(
+                    initialize.ground_distance_derivative(
+                        angle, operating_frequency, *atmosphere_params
+                    ),
+                    expected_derivative,
+                    rel_tol=1E-6
+                )
 
     def test_pedersen_angle(self):
         """
         Tests get_pedersen_angle
         """
-        for atmosphere, expected_result in [(self.atmosphere_1, 0.743177), (self.atmosphere_2, 0.691971),
-                                            (self.atmosphere_3, 0.502671), (self.atmosphere_4, None)]:
+        for system_params, expected_result in [(self.atmosphere_1, 0.743177), (self.atmosphere_2, 0.691971),
+                                               (self.atmosphere_3, 0.502671), (self.atmosphere_4, None)]:
+            frequency = system_params[3]
+            atmosphere_params = system_params[:3]
             if expected_result is None:
                 with self.assertRaises(ValueError):
-                    qp.get_pedersen_angle(*atmosphere)
-            else:
-                testing.assert_is_close(qp.get_pedersen_angle(*atmosphere), expected_result, rel_tol=1E-6)
-
-    def test_get_apogee_height(self):
-        for atmosphere, launch_angle, expected_result in [
-            (self.atmosphere_1, math.pi/8, 6440033), (self.atmosphere_2, math.pi/5, 6817028.),
-                (self.atmosphere_3, math.pi/3, None), (self.atmosphere_4, math.pi/4, 6433896.)]:
-            if expected_result is None:
-                with self.assertRaises(ValueError):
-                    qp.get_apogee_height(launch_angle, *atmosphere)
+                    initialize.get_pedersen_angle(frequency, *atmosphere_params)
             else:
                 testing.assert_is_close(
-                    qp.get_apogee_height(launch_angle, *atmosphere),
+                    initialize.get_pedersen_angle(frequency, *atmosphere_params),
+                    expected_result,
+                    rel_tol=1E-6
+                )
+
+    def test_get_apogee_height(self):
+        for system_params, launch_angle, expected_result in [
+            (self.atmosphere_1, math.pi/8, 6440033), (self.atmosphere_2, math.pi/5, 6817028.),
+                (self.atmosphere_3, math.pi/3, None), (self.atmosphere_4, math.pi/4, 6433896.)]:
+            frequency = system_params[3]
+            atmosphere_params = system_params[:3]
+            if expected_result is None:
+                with self.assertRaises(ValueError):
+                    initialize.get_apogee_height(launch_angle, frequency, *atmosphere_params)
+            else:
+                testing.assert_is_close(
+                    initialize.get_apogee_height(launch_angle, frequency, *atmosphere_params),
                     expected_result, rel_tol=1E-6
                 )
 
@@ -131,17 +153,19 @@ class TestQuasiParabolicBaseParams(TestCase):
         """
         Tests get_apogee_ground_distance
         """
-        for atmosphere, launch_angle, expected_result in [
+        for system_params, launch_angle, expected_result in [
             (self.atmosphere_1, math.pi/8, 232430.150104903),
                 (self.atmosphere_2, math.pi/5, 702961.905270499),
                 (self.atmosphere_3, math.pi/3, None),
                 (self.atmosphere_4, math.pi/4, 75946.49213141459)]:
+            frequency = system_params[3]
+            atmosphere_params = system_params[:3]
             if expected_result is None:
                 with self.assertRaises(ValueError):
-                    qp.get_apogee_ground_distance(launch_angle, *atmosphere)
+                    initialize.get_apogee_ground_distance(launch_angle, frequency, *atmosphere_params)
             else:
                 testing.assert_is_close(
-                    qp.get_apogee_ground_distance(launch_angle, *atmosphere),
+                    initialize.get_apogee_ground_distance(launch_angle, frequency, *atmosphere_params),
                     expected_result, rel_tol=1E-6
                 )
 
@@ -190,26 +214,26 @@ class TestQuasiParabolicBaseParams(TestCase):
             151892.98426254248: -1.862645149230957e-9
 
         }
-        i = 1
-        for atmosphere, launch_angle, expected_result in [
+
+        for system_params, launch_angle, expected_result in [
             (self.atmosphere_1, math.pi/5, heights_map_1),
                 (self.atmosphere_2, math.pi/5, heights_map_2),
                 (self.atmosphere_3, math.pi/4, heights_map_3),
                 (self.atmosphere_4, math.pi/4, heights_map_4)]:
-            print("Doing test " + str(i))
-            i += 1
+            frequency = system_params[3]
+            atmosphere_params = system_params[:3]
+
             if expected_result is None:
                 with self.assertRaises(ValueError):
-                    qp.get_qp_heights(launch_angle, np.zeros(10), *atmosphere)
+                    initialize.get_qp_heights(launch_angle, np.zeros(10), frequency, *atmosphere_params)
             else:
                 distances = list(expected_result.keys())
                 heights = [expected_result[key] for key in distances]
                 dists_numpy = np.array(distances)
                 expected_heights_numpy = np.array(heights)
-                result_heights_numpy = qp.get_qp_heights(launch_angle, dists_numpy, *atmosphere) - coords.EARTH_RADIUS
-                # plt.plot(dists_numpy, expected_heights_numpy, color='green')
-                # plt.plot(dists_numpy, result_heights_numpy, color='blue')
-                # plt.show()
+                result_heights_numpy = initialize.get_qp_heights(
+                    launch_angle, dists_numpy, frequency, *atmosphere_params) - coords.EARTH_RADIUS
+
                 np.testing.assert_allclose(
                     expected_heights_numpy, result_heights_numpy, rtol=1E-7, atol=1E-5
                 )
@@ -384,72 +408,89 @@ class TestQuasiParabolicBaseParams(TestCase):
         """
         Tests python code against mathematica.
         All distances are equally spaced.
-        atm_n_height_results_m signifies the m 'th ray in atmosphere n.
+        atm_n_height_results_m signifies the m 'th ray in system_params n.
         m is 1 or 2 (for high/low ray) and n is anything
         """
 
-        for atmosphere, ground_distance, expected_results in [
+        for system_params, ground_distance, expected_results in [
             (self.atmosphere_1, math.pi/20*coords.EARTH_RADIUS,
                 (self.atm_1_height_results_1, self.atm_1_height_results_2)),
                 (self.atmosphere_2, 1402928 + 1, (self.atm_2_height_results_1, self.atm_2_height_results_2)),
                 (self.atmosphere_3, math.pi/30*coords.EARTH_RADIUS, None),
                 (self.atmosphere_4, math.pi/50*coords.EARTH_RADIUS, (self.atm_4_height_results_1,))]:
+            operating_frequency = system_params[3]
+            atmosphere_params = system_params[:3]
             if expected_results is None:
                 with self.assertRaises(ValueError):
-                    qp.get_quasi_parabolic_path(ground_distance,,
+                    initialize.get_quasi_parabolic_path(
+                        ground_distance,
+                        operating_frequency,
+                        *atmosphere_params,
+                    )
             else:
                 point_count = len(expected_results[0])
-
-                result_paths = qp.get_quasi_parabolic_path(ground_distance,,
+                result_paths = initialize.get_quasi_parabolic_path(
+                    ground_distance,
+                    operating_frequency,
+                    *atmosphere_params,
+                    ground_distance / (point_count - 1)
+                )
                 self.assertTrue(len(result_paths) == len(expected_results), "Gotten {} paths but expected {}"
                                 .format(len(result_paths), len(expected_results)))
 
     def test_plotting_path(self):
-        should_plot = True
-        if not should_plot:
-            return
-        for atmosphere, ground_distance, expected_results in [
-            (self.atmosphere_1, math.pi/20*coords.EARTH_RADIUS,
-                (self.atm_1_height_results_1, self.atm_1_height_results_2)),
-                (self.atmosphere_2, 1402928 + 1, (self.atm_2_height_results_1, self.atm_2_height_results_2)),
-                (self.atmosphere_3, math.pi/30*coords.EARTH_RADIUS, None),
-                (self.atmosphere_4, math.pi/50*coords.EARTH_RADIUS, (self.atm_4_height_results_1,))]:
-            if expected_results is not None:
-                point_count = len(expected_results[0])
-                result_paths = qp.get_quasi_parabolic_path(ground_distance,,
-                names = ("High", "Low")
-                colors = ("black", "white")
-                frequency = atmosphere[3]
-
-                semi_width = atmosphere[0] - atmosphere[1]
-                max_height = max(
-                    (atmosphere[1] + 2 * semi_width - coords.EARTH_RADIUS) * 1.05 / 1000,
-                    np.amax(result_paths[0][:, 1] - coords.EARTH_RADIUS) / 1000
-                )
-
-                fig, ax = plotting.visualize_atmosphere(
-                    lambda a: np.sqrt(qp_atmosphere.e_density_helper(a[:, 0], *atmosphere) * 80.62),
-                    np.array([coords.EARTH_RADIUS, 0, 0]),
-                    np.array([coords.EARTH_RADIUS, result_paths[0][-1, 0] / coords.EARTH_RADIUS, 0]),
-                    show=False,
-                    max_height=max_height
-                )
-
-                for expected, gotten, name, color in zip(expected_results, result_paths, names, colors):
-                    distances = list(expected.keys())
-                    heights = [expected[key] for key in distances]
-                    expected_distances_numpy = np.array(list(distances))
-                    expected_heights_numpy = np.array(heights)
-                    expected_combined = np.column_stack((
-                        expected_distances_numpy,
-                        expected_heights_numpy
-                    ))
-                    gotten[:, 1] = gotten[:, 1] - coords.EARTH_RADIUS
-                    np.testing.assert_allclose(
-                        expected_combined, gotten, rtol=1E-7, atol=1E-4
+        if SHOULD_PLOT_GRAPHS:
+            for system_params, ground_distance, expected_results in [
+                (self.atmosphere_1, math.pi/20*coords.EARTH_RADIUS,
+                    (self.atm_1_height_results_1, self.atm_1_height_results_2)),
+                    (self.atmosphere_2, 1402928 + 1, (self.atm_2_height_results_1, self.atm_2_height_results_2)),
+                    (self.atmosphere_3, math.pi/30*coords.EARTH_RADIUS, None),
+                    (self.atmosphere_4, math.pi/50*coords.EARTH_RADIUS, (self.atm_4_height_results_1,))]:
+                if expected_results is not None:
+                    point_count = len(expected_results[0])
+                    frequency = system_params[3]
+                    atmosphere_parameters = system_params[:3]
+                    result_paths = initialize.get_quasi_parabolic_path(
+                        ground_distance,
+                        frequency,
+                        *atmosphere_parameters,
+                        ground_distance / (point_count - 1)
                     )
-                    if fig is not None:
-                        plotting.visualize_path(gotten, show=False, fig=fig, ax=ax, color=color,
-                                                ray_type=name, frequency=frequency)
 
-                plt.show()
+                    names = ("High", "Low")
+                    colors = ("black", "white")
+
+                    semi_width = atmosphere_parameters[0] - atmosphere_parameters[1]
+                    max_height = max(
+                        (atmosphere_parameters[1] + 2 * semi_width - coords.EARTH_RADIUS) * 1.05 / 1000,
+                        np.amax(result_paths[0][:, 1] - coords.EARTH_RADIUS) / 1000
+                    )
+
+                    # We can pass None to r because we pass a vector to r_norm, and qp atmosphere only needs the norm
+                    fig, ax = plotting.visualize_atmosphere(
+                        lambda a: np.sqrt(qp_atmosphere.calculate_plasma_frequency(
+                            None, a[:, 0], *atmosphere_parameters)),
+                        np.array([coords.EARTH_RADIUS, 0, 0]),
+                        np.array([coords.EARTH_RADIUS, result_paths[0][-1, 0] / coords.EARTH_RADIUS, 0]),
+                        show=False,
+                        max_height=max_height
+                    )
+
+                    for expected, gotten, name, color in zip(expected_results, result_paths, names, colors):
+                        distances = list(expected.keys())
+                        heights = [expected[key] for key in distances]
+                        expected_distances_numpy = np.array(list(distances))
+                        expected_heights_numpy = np.array(heights)
+                        expected_combined = np.column_stack((
+                            expected_distances_numpy,
+                            expected_heights_numpy
+                        ))
+                        gotten[:, 1] = gotten[:, 1] - coords.EARTH_RADIUS
+                        np.testing.assert_allclose(
+                            expected_combined, gotten, rtol=1E-7, atol=1E-4
+                        )
+                        if fig is not None:
+                            plotting.visualize_path(gotten, show=False, fig=fig, ax=ax, color=color,
+                                                    ray_type=name, frequency=frequency)
+
+                    plt.show()

@@ -6,6 +6,7 @@ To see the required atmosphere function definitions look at atmosphere.base
 from numpy.typing import *
 import numpy as np
 import typing
+from scipy import linalg
 
 
 def get_qp_parameters(*atmosphere_params: float) -> typing.Tuple[float, ...]:
@@ -25,6 +26,9 @@ def calculate_plasma_frequency(position_vector: ArrayLike,
     """
     Follows the description in atmosphere.base to calculate plasma frequency for given positions
     """
+    if norm_vector is None:
+        norm_vector = linalg.norm(position_vector, axis=1)
+
     atmosphere_height_of_max, atmosphere_base_height, max_plasma_frequency = atmosphere_params
     semi_width = atmosphere_height_of_max - atmosphere_base_height
 

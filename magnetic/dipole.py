@@ -3,10 +3,10 @@ Implements the dipole model of earths magnetic field. For reference, these calcu
 https://en.wikipedia.org/wiki/Magnetic_dipole
 https://en.wikipedia.org/wiki/Dipole_model_of_the_Earth%27s_magnetic_field
 """
-from utils import constants, vector
+from core import constants, vector
 import numpy as np
-from utils.constants import STANDARD_MAGNETIC_FIELD_MAXIMUM as B_MAX
-from utils.constants import EARTH_RADIUS_CUBED
+from core.constants import STANDARD_MAGNETIC_FIELD_MAXIMUM as B_MAX
+from core.constants import EARTH_RADIUS_CUBED
 from numpy.typing import *
 from typing import Optional
 from scipy import linalg

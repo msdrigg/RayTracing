@@ -6,8 +6,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy import linalg, integrate, optimize, interpolate
 import os
-from utils import initialize
-from utils import vector, plotting, path, constants, equations, parallel, coordinates as coords
+from core import initialize
+from core import vector, plotting, path, constants, equations, parallel, coordinates as coords
 import multiprocessing as mp
 from typing import *
 import math
@@ -36,6 +36,27 @@ def load_dynamic_modules(atmosphere_module_name: str, magnetic_field_module_name
     atmosphere = importlib.import_module('atmosphere.' + atmosphere_module_name)
     global magnetic
     magnetic = importlib.import_module('magnetic.' + magnetic_field_module_name)
+
+
+def solve_yp_pt(x: float, y: float, y_squared: float, yt: float):
+    """
+    Given the parameters, return the solution to yp
+    :return: yp solved
+    """
+    function_args = x, y_squared, yt
+    # TODO: Optimize this. This function gets run nearly 2000*2500 times for each newton-raphson step
+    #   Try brent's method. It's not as quickly convergent but it is written in C
+    yp_solved, details = optimize.toms748(
+        equations.equation_13, -y, y,
+        args=function_args, xtol=1E-15, rtol=1E-15, full_output=True
+    )
+    if not details.converged:
+        warnings.warn(
+            f"Error solving for yp using equation 13. Attempted {details.iterations} iterations "
+            f"and resulted in {details.root}, "
+            f"stopping with reason: {details.flag}."
+        )
+    return yp_solved
 
 
 def integrate_over_path(
@@ -78,20 +99,7 @@ def integrate_over_path(
         if debug_zero_field:
             yp[n] = 0
         else:
-            function_args = x[n], y_squared[n], yt[n]
-            # TODO: Optimize this. This function gets run nearly 2000*2500 times for each newton-raphson step
-            #   Try brent's method. It's not as quickly convergent but it is written in C
-            result, details = optimize.toms748(
-                equations.equation_13, -y[n], y[n],
-                args=function_args, xtol=1E-15, rtol=1E-15, full_output=True
-            )
-            if not details.converged:
-                warnings.warn(
-                    f"Error solving for yp using equation 13. Attempted {details.iterations} iterations "
-                    f"and resulted in {details.root}, "
-                    f"stopping with reason: {details.flag}."
-                )
-            yp[n] = result
+            yp[n] = solve_yp_pt(x[n], y[n], y_squared[n], yt[n])
 
     yp_squared = np.square(yp)
     fractions = equations.equation_16(yp, yp_squared, x, y_squared)
@@ -289,10 +297,10 @@ def calculate_derivatives(
     # We need to make sure our integration step size is significantly smaller than our derivative
     #   or else our truncation error will be too large
 
-    total_ground_distance = math.acos(np.dot(
-        vector.normalize_single_vector(coords.spherical_to_cartesian(start_point_spherical)),
-        vector.normalize_single_vector(coords.spherical_to_cartesian(end_point_spherical))
-    ))
+    total_ground_distance = vector.angle_between_vector_collections(
+        coords.spherical_to_cartesian(start_point_spherical),
+        coords.spherical_to_cartesian(end_point_spherical)
+    ).item()
 
     # Calculate integration_step_number using the derivative_step_size if not given
     if integration_step_number is None:
@@ -499,10 +507,10 @@ def trace(
 
     load_dynamic_modules(atmosphere_module_name, magnetic_field_module_name)
 
-    total_angle = math.acos(np.dot(
-        vector.normalize_single_vector(coords.spherical_to_cartesian(start_point_spherical)),
-        vector.normalize_single_vector(coords.spherical_to_cartesian(end_point_spherical))
-    ))
+    total_angle = vector.angle_between_vector_collections(
+        coords.spherical_to_cartesian(start_point_spherical),
+        coords.spherical_to_cartesian(end_point_spherical)
+    ).item()
 
     qp_path_appoximation = initialize.get_quasi_parabolic_path(
         total_angle * coords.EARTH_RADIUS, *atmosphere.get_qp_parameters(*atmosphere_parameters)
