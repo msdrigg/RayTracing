@@ -46,7 +46,8 @@ def solve_yp_pt(x: float, y: float, y_squared: float, yt: float):
     function_args = x, y_squared, yt
     # TODO: Optimize this. This function gets run nearly 2000*2500 times for each newton-raphson step
     #   Try brent's method. It's not as quickly convergent but it is written in C
-    yp_solved, details = optimize.toms748(
+    # noinspection PyTypeChecker
+    yp_solved, details = optimize.brentq(
         equations.equation_13, -y, y,
         args=function_args, xtol=1E-15, rtol=1E-15, full_output=True
     )
@@ -85,16 +86,20 @@ def integrate_over_path(
     r_dot_norm = linalg.norm(r_dot, axis=1)
 
     t = r_dot / r_dot_norm
+    # noinspection PyUnresolvedReferences
     gyro_frequency_squared_array = magnetic.calculate_gyro_frequency(r, r_norm)
     y = gyro_frequency_squared_array / operating_frequency
     y_squared = np.square(y)
 
+    # noinspection PyUnresolvedReferences
     y_vec = magnetic.calculate_magnetic_field_unit_vec(r, r_norm) * gyro_frequency_squared_array / operating_frequency
+    # noinspection PyUnresolvedReferences
     x = atmosphere.calculate_plasma_frequency(r, r_norm) / operating_frequency ** 2
     yt = vector.row_dot_product(y_vec, t)
 
     yp = np.zeros(integration_step_number)
 
+    # TODO: Optimize this
     for n in range(integration_step_number):
         if debug_zero_field:
             yp[n] = 0
@@ -512,6 +517,7 @@ def trace(
         coords.spherical_to_cartesian(end_point_spherical)
     ).item()
 
+    # noinspection PyUnresolvedReferences
     qp_path_appoximation = initialize.get_quasi_parabolic_path(
         total_angle * coords.EARTH_RADIUS, *atmosphere.get_qp_parameters(*atmosphere_parameters)
     )

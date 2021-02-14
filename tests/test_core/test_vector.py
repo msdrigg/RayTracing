@@ -2,12 +2,12 @@
 Testing functions from the vector class
 """
 from unittest import TestCase
-import numpy as np
 from core.vector import *
 from core import testing
 from numpy import testing as np_test
 from core import coordinates as coords
 import math
+import numpy as np
 
 
 class TestAngleBetweenVectorCollections(TestCase):
