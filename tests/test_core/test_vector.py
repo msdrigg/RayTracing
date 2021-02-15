@@ -3,7 +3,7 @@ Testing functions from the vector class
 """
 from unittest import TestCase
 from core.vector import *
-from core import testing
+from tests import base
 from numpy import testing as np_test
 from core import coordinates as coords
 import math
@@ -74,7 +74,7 @@ class TestAngleBetweenVectorCollections(TestCase):
             self.test_vector_1d_1,
             self.test_vector_1d_3
         ).item()
-        testing.assert_is_close(angle, self.angle_1d_expected)
+        base.assert_is_close(angle, self.angle_1d_expected)
 
     def test_failure_on_unequal_length(self):
         with self.assertRaises(ValueError):

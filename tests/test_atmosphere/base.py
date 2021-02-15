@@ -15,7 +15,7 @@ class BasePlasmaFrequencyTestCase(TestCase):
     plasma_frequency_calculations_file_name = None
     atmosphere_parameters_file_name = os.path.join(
         THIS_DIR,
-        "atmosphere_parameter_definitions.json"
+        "calculations/atmosphere_parameter_definitions.json"
     )
 
     # noinspection PyTypeChecker
@@ -39,7 +39,6 @@ class BasePlasmaFrequencyTestCase(TestCase):
         )
 
     def verify_vectorized_calculation(self, norm_value_list, params):
-
         nan_loc = np.isnan(norm_value_list[:, 1])
         null_values = norm_value_list[nan_loc]
 
@@ -52,11 +51,12 @@ class BasePlasmaFrequencyTestCase(TestCase):
 
         # Check for correctness
         real_value_loc = np.logical_not(nan_loc)
+        real_values = norm_value_list[real_value_loc]
         results = self.calculate_plasma_frequency_squared(
-            0, norm_value_list[real_value_loc, 0], *params
+            0, real_values[:, 0], *params
         )
         np_test.assert_allclose(
-            norm_value_list[real_value_loc, 1] / 1E6 ** 2,
+            real_values[:, 1] / 1E6 ** 2,
             results / 1E6 ** 2,
             atol=1E-10
         )

@@ -3,7 +3,8 @@ Testing the initialization functions
 """
 from unittest import TestCase
 from core import coordinates as coords
-from core import testing, initialize
+from core import initialize
+from tests import base
 import math
 import numpy as np
 from matplotlib import pyplot as plt
@@ -56,11 +57,11 @@ class TestQuasiParabolicBaseParams(TestCase):
             test_betab = initialize.calculate_param_beta_b(instance["beta0"], instance["rb"])
             test_xb = initialize.calculate_param_x_b(instance["beta0"], instance["rb"])
 
-            testing.assert_is_close(instance["a"], test_a, rel_tol=1E-6)
-            testing.assert_is_close(instance["b"], test_b, rel_tol=1E-6)
-            testing.assert_is_close(instance["c"], test_c, rel_tol=1E-6)
-            testing.assert_is_close(instance["betab"], test_betab, rel_tol=1E-6)
-            testing.assert_is_close(instance["xb"], test_xb, rel_tol=1E-6)
+            base.assert_is_close(instance["a"], test_a, rel_tol=1E-6)
+            base.assert_is_close(instance["b"], test_b, rel_tol=1E-6)
+            base.assert_is_close(instance["c"], test_c, rel_tol=1E-6)
+            base.assert_is_close(instance["betab"], test_betab, rel_tol=1E-6)
+            base.assert_is_close(instance["xb"], test_xb, rel_tol=1E-6)
 
     atmosphere_1 = (200E3 + coords.EARTH_RADIUS, 40E3 + coords.EARTH_RADIUS, 7E6**2, 10E6)
     atmosphere_2 = (500E3 + coords.EARTH_RADIUS, 350E3 + coords.EARTH_RADIUS, 7E6**2, 10E6)
@@ -83,7 +84,7 @@ class TestQuasiParabolicBaseParams(TestCase):
                 with self.assertRaises(ValueError):
                     initialize.get_angle_of_shortest_path(frequency, *atmosphere_params)
             else:
-                testing.assert_is_close(
+                base.assert_is_close(
                     initialize.get_angle_of_shortest_path(frequency, *atmosphere_params),
                     expected_result, rel_tol=1E-5
                 )
@@ -108,7 +109,7 @@ class TestQuasiParabolicBaseParams(TestCase):
             atmosphere_params = system_params[:3]
             operating_frequency = system_params[3]
             for angle, expected_derivative in angle_params:
-                testing.assert_is_close(
+                base.assert_is_close(
                     initialize.ground_distance_derivative(
                         angle, operating_frequency, *atmosphere_params
                     ),
@@ -128,7 +129,7 @@ class TestQuasiParabolicBaseParams(TestCase):
                 with self.assertRaises(ValueError):
                     initialize.get_pedersen_angle(frequency, *atmosphere_params)
             else:
-                testing.assert_is_close(
+                base.assert_is_close(
                     initialize.get_pedersen_angle(frequency, *atmosphere_params),
                     expected_result,
                     rel_tol=1E-6
@@ -144,7 +145,7 @@ class TestQuasiParabolicBaseParams(TestCase):
                 with self.assertRaises(ValueError):
                     initialize.get_apogee_height(launch_angle, frequency, *atmosphere_params)
             else:
-                testing.assert_is_close(
+                base.assert_is_close(
                     initialize.get_apogee_height(launch_angle, frequency, *atmosphere_params),
                     expected_result, rel_tol=1E-6
                 )
@@ -164,7 +165,7 @@ class TestQuasiParabolicBaseParams(TestCase):
                 with self.assertRaises(ValueError):
                     initialize.get_apogee_ground_distance(launch_angle, frequency, *atmosphere_params)
             else:
-                testing.assert_is_close(
+                base.assert_is_close(
                     initialize.get_apogee_ground_distance(launch_angle, frequency, *atmosphere_params),
                     expected_result, rel_tol=1E-6
                 )

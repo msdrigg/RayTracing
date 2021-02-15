@@ -11,7 +11,7 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class TestPlasmaFrequencySquaredChapman(BasePlasmaFrequencyTestCase):
-    plasma_frequency_calculations_file_name = os.path.join(THIS_DIR, "chapman_layers_calculations.json")
+    plasma_frequency_calculations_file_name = os.path.join(THIS_DIR, "calculations/chapman_layers_calculations.json")
 
     def calculate_plasma_frequency_squared(self, *args, **kwargs):
         return calculate_plasma_frequency_squared(*args, **kwargs)

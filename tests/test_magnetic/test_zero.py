@@ -2,16 +2,21 @@
 Testing the zero field functions
 """
 
-from tests.test_magnetic.base import BaseMagFieldTestCase
+from tests.test_magnetic.base import *
 from magnetic.zero import *
 
 
-class TestDipoleField(BaseMagFieldTestCase):
-    gyro_frequency_calculations_file_name = "zero_gyro_frequency_calculated.json.json"
-    field_vec_calculations_file_name = "zero_field_vec_calculated.json.json"
+class ZeroFieldGyroFrequencyTestCase(BaseGyroFrequencyTestCase):
+    gyro_frequency_calculations_file_name = "calculations/zero_gyro_frequency_calculated.json"
 
-    def calculate_gyro_frequency(self, *args, **kwargs):
+    # noinspection PyTypeChecker
+    def calculate_target_value(self, *args, **kwargs) -> np.ndarray:
         return calculate_gyro_frequency(*args, **kwargs)
 
-    def calculate_field_unit_vec(self, *args, **kwargs):
+
+class ZeroFieldFieldVecTestCase(BaseFieldVecTestCase):
+    field_vec_calculations_file_name = "calculations/zero_field_vec_calculated.json"
+
+    # noinspection PyTypeChecker
+    def calculate_target_value(self, *args, **kwargs) -> np.ndarray:
         return calculate_magnetic_field_unit_vec(*args, **kwargs)
