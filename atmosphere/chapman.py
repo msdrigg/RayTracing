@@ -5,11 +5,11 @@ To see the required atmosphere function definitions look at atmosphere.base
 
 The equations in this file were gotten from
 www.uio.no/studier/emner/matnat/fys/nedlagte-emner/FYS3610/h04/undervisningsmateriale/Chapter%204-25August.pdf
+https://trs.jpl.nasa.gov/bitstream/handle/2014/40912/08-24.pdf?sequence=1
 """
 
 from numpy.typing import *
 import numpy as np
-import typing
 from scipy import linalg
 
 
@@ -30,12 +30,3 @@ def calculate_plasma_frequency_squared(
     z1 = (norms - atmosphere_height_of_max) / atmosphere_semi_width
 
     return maximum_plasma_frequency_squared * np.exp((1 - (z1 + np.exp(-z1))) / 2)
-
-
-def get_qp_parameters(*atmosphere_params: float) -> typing.Tuple[float, ...]:
-    """
-    This method calculates qp parameters. See atmosphere.base for a more detailed description
-    """
-    atmosphere_height_of_max, atmosphere_semi_width, maximum_gyro_frequency = atmosphere_params
-
-    return atmosphere_height_of_max, atmosphere_height_of_max - atmosphere_semi_width, maximum_gyro_frequency

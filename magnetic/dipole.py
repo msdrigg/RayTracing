@@ -2,6 +2,7 @@
 Implements the dipole model of earths magnetic field. For reference, these calculations were taken from these sources
 https://en.wikipedia.org/wiki/Magnetic_dipole
 https://en.wikipedia.org/wiki/Dipole_model_of_the_Earth%27s_magnetic_field
+https://pages.jh.edu/polson1/pdfs/ChangesinEarthsDipole.pdf
 """
 from core import constants, vector
 import numpy as np
@@ -10,6 +11,8 @@ from core.constants import EARTH_RADIUS_CUBED
 from numpy.typing import *
 from typing import Optional
 from scipy import linalg
+
+MOMENT = np.array(constants.EARTH_DIPOLE_MOMENT)
 
 
 def calculate_gyro_frequency(
@@ -26,10 +29,9 @@ def calculate_gyro_frequency(
         norms = linalg.norm(position_vector, axis=1)
 
     radii_cubed = np.power(norms, -3)
-    cos_thetas = position_vector[:, 2] / norms
+    cos_thetas = np.atleast_2d(position_vector)[:, 2] / norms
     
     field_magnitude = B_MAX * EARTH_RADIUS_CUBED * radii_cubed * np.sqrt(1 + 3 * np.square(cos_thetas))
-
     return constants.B_FACTOR * field_magnitude
 
 
@@ -50,9 +52,6 @@ def calculate_magnetic_field_unit_vec(
 
     unit_position_vectors = position_vector / norms
 
-    # We are optimizing here because we know that the unit_magnetic_moment of earth's magnetic field is
-    # -z_hat. Because the north-south pole confusion.
-    field_vector = -3 * unit_position_vectors * unit_position_vectors[:, 2]
-    field_vector[:, 2] -= 1
+    field_vector = 3 * unit_position_vectors * vector.row_dot_product(unit_position_vectors, MOMENT) - MOMENT
 
     return vector.normalize_rows(field_vector)

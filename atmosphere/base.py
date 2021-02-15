@@ -22,13 +22,3 @@ def calculate_plasma_frequency_squared(
     :returns: A vector whose elements are the e density evaluated at the provided cartesian coordinates
     """
     pass
-
-
-def get_qp_parameters(*atmosphere_params) -> typing.Tuple[float]:
-    """
-    Because we use qp path for initialization, we need a method to calculate the qp parameters from any atmosphere's
-    parameters.
-    :returns: A tuple
-    (atmosphere_height_of_max, atmosphere_base_height, atmosphere_max_gyro_frequency) (all floats)
-    """
-    pass

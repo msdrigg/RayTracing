@@ -3,6 +3,7 @@ This file defines constants that can be used throughout the project
 """
 EARTH_RADIUS = 6371E3  # m
 EARTH_RADIUS_CUBED = 258596602811000000000  # m^3
+EARTH_DIPOLE_MOMENT = [-0.447E22, 1.34E22, -7.66E22]
 STANDARD_MAGNETIC_FIELD_MAXIMUM = 3.12E-5  # T
 E_CHARGE = 1.6022E-19  # Coulombs
 E_MASS = 9.10938356E-31  # kg

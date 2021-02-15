@@ -517,13 +517,12 @@ def trace(
         coords.spherical_to_cartesian(end_point_spherical)
     ).item()
 
-    # noinspection PyUnresolvedReferences
-    qp_path_appoximation = initialize.get_quasi_parabolic_path(
-        total_angle * coords.EARTH_RADIUS, *atmosphere.get_qp_parameters(*atmosphere_parameters)
+    qp_path_approximation = initialize.get_quasi_parabolic_path(
+        total_angle * coords.EARTH_RADIUS, *atmosphere_parameters
     )
     heights_interpolation = interpolate.InterpolatedUnivariateSpline(
-        qp_path_appoximation[0],
-        qp_path_appoximation[1],
+        qp_path_approximation[0],
+        qp_path_approximation[1],
         k=interpolated_degree,
         ext=3
     )

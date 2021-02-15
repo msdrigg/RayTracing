@@ -2,20 +2,16 @@
 Testing the zero field functions
 """
 
-from unittest import TestCase
+from tests.test_magnetic.base import BaseMagFieldTestCase
+from magnetic.zero import *
 
 
-class TestGyroFrequency(TestCase):
-    def test_random_vectors(self):
-        self.fail()
+class TestDipoleField(BaseMagFieldTestCase):
+    gyro_frequency_calculations_file_name = "zero_gyro_frequency_calculated.json.json"
+    field_vec_calculations_file_name = "zero_field_vec_calculated.json.json"
 
-    def test_poles(self):
-        self.fail()
+    def calculate_gyro_frequency(self, *args, **kwargs):
+        return calculate_gyro_frequency(*args, **kwargs)
 
-
-class TestFieldVec(TestCase):
-    def test_random_vectors(self):
-        self.fail()
-
-    def test_poles(self):
-        self.fail()
+    def calculate_field_unit_vec(self, *args, **kwargs):
+        return calculate_magnetic_field_unit_vec(*args, **kwargs)

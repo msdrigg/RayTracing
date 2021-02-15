@@ -1,0 +1,330 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 12.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[     12039,        322]
+NotebookOptionsPosition[     11278,        304]
+NotebookOutlinePosition[     11616,        319]
+CellTagsIndexPosition[     11573,        316]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell[BoxData[""], "Input",
+ CellChangeTimes->{{3.822358306875135*^9, 
+  3.822358310049704*^9}},ExpressionUUID->"a9bcb3be-33ef-4f88-ada6-\
+46cf0ba60b3d"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"ToJson", "[", 
+    RowBox[{"keys_", ",", "values_"}], "]"}], ":=", 
+   RowBox[{"ExportString", "[", 
+    RowBox[{
+     RowBox[{"MapThread", "[", 
+      RowBox[{
+       RowBox[{"Function", "[", 
+        RowBox[{
+         RowBox[{"{", 
+          RowBox[{"x", ",", "y"}], "}"}], ",", " ", 
+         RowBox[{
+          RowBox[{"ToString", "[", "x", "]"}], "\[Rule]", "y"}]}], "]"}], ",",
+        " ", 
+       RowBox[{"{", 
+        RowBox[{"keys", ",", "values"}], "}"}]}], "]"}], ",", " ", 
+     "\"\<JSON\>\""}], "]"}]}], ";"}]], "Input",
+ CellChangeTimes->{{3.8223584360388403`*^9, 3.822358446189205*^9}, {
+  3.8223585139290648`*^9, 3.822358570171475*^9}, {3.8223586264848948`*^9, 
+  3.822358628231985*^9}, {3.822362279698183*^9, 3.822362299212412*^9}},
+ CellLabel->
+  "In[693]:=",ExpressionUUID->"a11dce8a-13a0-4031-98b5-904597797f91"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"M0", " ", "=", " ", 
+   RowBox[{"{", 
+    RowBox[{"MX", ",", " ", "MY", ",", " ", "MZ"}], "}"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"DipoleMagneticFieldMag", "[", "position_", "]"}], ":=", 
+  RowBox[{"B0", 
+   RowBox[{
+    RowBox[{"(", 
+     RowBox[{"RE", "/", 
+      RowBox[{"Norm", "[", "position", "]"}]}], ")"}], "^", "3"}], 
+   RowBox[{"Sqrt", "[", 
+    RowBox[{"1", " ", "+", 
+     RowBox[{"3", 
+      RowBox[{
+       RowBox[{"Cos", "[", 
+        RowBox[{
+         RowBox[{"position", "[", 
+          RowBox[{"[", "2", "]"}], "]"}], "/", 
+         RowBox[{"Norm", "[", "position", "]"}]}], "]"}], "^", "2"}]}]}], 
+    "]"}]}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"DipoleMagneticFieldVec", "[", "position_", "]"}], ":=", 
+  RowBox[{"Module", "[", 
+   RowBox[{
+    RowBox[{"{", "rhat", "}"}], ",", "\[IndentingNewLine]", 
+    RowBox[{
+     RowBox[{"rhat", " ", "=", " ", 
+      RowBox[{"Normalize", "[", "position", "]"}]}], ";", 
+     "\[IndentingNewLine]", 
+     RowBox[{"Unevaluated", "[", 
+      RowBox[{"Normalize", "[", 
+       RowBox[{
+        RowBox[{"(", 
+         RowBox[{
+          RowBox[{"3", "rhat", 
+           RowBox[{"(", 
+            RowBox[{"Dot", "[", 
+             RowBox[{"M0", ",", "rhat"}], "]"}], ")"}]}], " ", "-", "M0"}], 
+         ")"}], "/", 
+        RowBox[{
+         RowBox[{"Norm", "[", "position", "]"}], "^", "3"}]}], "]"}], 
+      "]"}]}]}], "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"DipoleMagneticFieldMagPosition", "[", "position_", "]"}], ":=", 
+  RowBox[{"{", 
+   RowBox[{"position", ",", " ", 
+    RowBox[{"DipoleMagneticFieldMag", "[", "position", "]"}]}], 
+   "}"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"DipoleMagneticFieldVecPosition", "[", "position_", "]"}], ":=", 
+  RowBox[{"{", 
+   RowBox[{"position", ",", " ", 
+    RowBox[{"DipoleMagneticFieldVec", "[", "position", "]"}]}], 
+   "}"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ZeroMagneticFieldVec", "[", "position_", "]"}], ":=", 
+  RowBox[{"{", 
+   RowBox[{"0", ",", " ", "0", ",", " ", "1"}], 
+   "}"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ZeroMagneticFieldMag", "[", "position_", "]"}], ":=", 
+  "0"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ZeroMagneticFieldVecPosition", "[", "position_", "]"}], ":=", 
+  RowBox[{"{", 
+   RowBox[{"position", ",", " ", 
+    RowBox[{"{", 
+     RowBox[{"0", ",", " ", "0", ",", " ", "1"}], "}"}]}], 
+   "}"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ZeroMagneticFieldMagPosition", "[", "position_", "]"}], ":=", 
+  RowBox[{"{", 
+   RowBox[{"position", ",", " ", "0"}], "}"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"EvaluateNumeric", "[", 
+   RowBox[{"results_", ",", " ", "NM0_", ",", " ", "NB0_", ",", " ", "NRE_"}],
+    "]"}], ":=", 
+  RowBox[{
+   RowBox[{"results", "//.", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"B0", "\[Rule]", "NB0"}], ",", 
+      RowBox[{"RE", "\[Rule]", "NRE"}]}], "}"}]}], "//.", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"MX", "\[Rule]", 
+      RowBox[{"NM0", "[", 
+       RowBox[{"[", "1", "]"}], "]"}]}], ",", " ", 
+     RowBox[{"MY", "\[Rule]", 
+      RowBox[{"NM0", "[", 
+       RowBox[{"[", "2", "]"}], "]"}]}], ",", 
+     RowBox[{"MZ", "\[Rule]", 
+      RowBox[{"NM0", "[", 
+       RowBox[{"[", "3", "]"}], "]"}]}]}], "}"}]}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"EvaluateResults", "[", "results_", "]"}], ":=", 
+  RowBox[{"EvaluateNumeric", "[", 
+   RowBox[{"results", ",", " ", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"-", "0.447*^22"}], ",", "1.34*^22", ",", 
+      RowBox[{"-", "7.66*^22"}]}], "}"}], ",", " ", "3.12*^-5", ",", 
+    "6.371*^6"}], "]"}]}]}], "Input",
+ CellChangeTimes->{{3.822358672727477*^9, 3.822359046585393*^9}, {
+   3.82236030228445*^9, 3.822360332211928*^9}, {3.822361807030035*^9, 
+   3.822361822947858*^9}, {3.822361944372444*^9, 3.822361961961985*^9}, {
+   3.822362160130189*^9, 3.822362240576282*^9}, 3.8223623995573*^9, {
+   3.822362443772635*^9, 3.822362443878008*^9}, {3.822362865651973*^9, 
+   3.822362882662107*^9}, 3.8223629478189297`*^9, {3.822363039501472*^9, 
+   3.8223630424125032`*^9}, {3.822363156875702*^9, 3.822363187810253*^9}, {
+   3.822363230382057*^9, 3.8223633070921497`*^9}},
+ CellLabel->
+  "In[889]:=",ExpressionUUID->"9532e7ce-ed53-451c-863c-06fec2d7cdbc"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"PositionsRandom", " ", "=", " ", 
+   RowBox[{"{", "\[IndentingNewLine]", 
+    RowBox[{
+     RowBox[{"FromSphericalCoordinates", "[", 
+      RowBox[{"{", 
+       RowBox[{"1", ",", " ", 
+        RowBox[{"\[Pi]", "/", "2"}], ",", " ", "0"}], "}"}], "]"}], ",", 
+     "\[IndentingNewLine]", 
+     RowBox[{"FromSphericalCoordinates", "[", 
+      RowBox[{"{", 
+       RowBox[{
+        RowBox[{"RE", "*", "2"}], ",", " ", 
+        RowBox[{"\[Pi]", "/", "2"}], ",", " ", "\[Pi]"}], "}"}], "]"}], ",", 
+     "\[IndentingNewLine]", 
+     RowBox[{"FromSphericalCoordinates", "[", 
+      RowBox[{"{", 
+       RowBox[{"RE", ",", " ", 
+        RowBox[{"\[Pi]", "/", "4"}], ",", " ", 
+        RowBox[{"\[Pi]", "/", "3"}]}], "}"}], "]"}], ",", 
+     "\[IndentingNewLine]", 
+     RowBox[{"FromSphericalCoordinates", "[", 
+      RowBox[{"{", 
+       RowBox[{"RE", ",", " ", 
+        RowBox[{"3", 
+         RowBox[{"\[Pi]", "/", "4"}]}], ",", " ", 
+        RowBox[{
+         RowBox[{"-", "2"}], 
+         RowBox[{"\[Pi]", "/", "3"}]}]}], "}"}], "]"}]}], 
+    "\[IndentingNewLine]", "}"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"PositionsPoles", " ", "=", " ", 
+   RowBox[{"{", "\[IndentingNewLine]", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"0", ",", " ", "0", ",", " ", "1"}], "}"}], ",", " ", 
+     RowBox[{"{", 
+      RowBox[{"0", ",", " ", "0", ",", " ", 
+       RowBox[{"-", "1"}]}], "}"}], ",", " ", 
+     RowBox[{"{", 
+      RowBox[{"0", ",", " ", "0", ",", " ", "RE"}], "}"}], ",", " ", 
+     RowBox[{"{", 
+      RowBox[{"0", ",", " ", "0", ",", " ", 
+       RowBox[{"-", "RE"}]}], "}"}]}], "\[IndentingNewLine]", "}"}]}], 
+  ";"}]}], "Input",
+ CellChangeTimes->{{3.822359213942527*^9, 3.822359223090899*^9}, {
+  3.822359630170741*^9, 3.8223596544307947`*^9}, {3.822359684482473*^9, 
+  3.822359827196362*^9}, {3.822359918446043*^9, 3.822359991098735*^9}, {
+  3.822360506064344*^9, 3.8223605067033167`*^9}, {3.82236056345931*^9, 
+  3.822360566907548*^9}},
+ CellLabel->
+  "In[722]:=",ExpressionUUID->"83637970-7d69-4a25-a074-f5400149f1c3"],
+
+Cell[BoxData[""], "Input",
+ CellChangeTimes->{{3.822360519056858*^9, 3.8223606398185787`*^9}, {
+  3.8223616495920258`*^9, 3.822361662377942*^9}, {3.822361696820773*^9, 
+  3.822361702646091*^9}, {3.822362431884144*^9, 
+  3.822362441145368*^9}},ExpressionUUID->"3e8a4eeb-8f97-4068-8d2f-\
+dce9bf385fb9"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"dipoleMags", " ", "=", " ", 
+   RowBox[{"ToJson", "[", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"\"\<poles\>\"", ",", " ", "\"\<random\>\""}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"EvaluateResults", "/@", 
+        RowBox[{
+        "DipoleMagneticFieldMagPosition", "/@", " ", "PositionsPoles"}]}], 
+       ",", " ", 
+       RowBox[{"EvaluateResults", "/@", 
+        RowBox[{
+        "DipoleMagneticFieldMagPosition", "/@", " ", "PositionsRandom"}]}]}], 
+      "}"}]}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"dipoleVecs", " ", "=", " ", 
+   RowBox[{"ToJson", "[", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"\"\<poles\>\"", ",", " ", "\"\<random\>\""}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"EvaluateResults", "/@", 
+        RowBox[{
+        "DipoleMagneticFieldVecPosition", "/@", " ", "PositionsPoles"}]}], 
+       ",", " ", 
+       RowBox[{"EvaluateResults", "/@", 
+        RowBox[{
+        "DipoleMagneticFieldVecPosition", "/@", " ", "PositionsRandom"}]}]}], 
+      "}"}]}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"zeroMags", " ", "=", " ", 
+   RowBox[{"ToJson", "[", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"\"\<poles\>\"", ",", " ", "\"\<random\>\""}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"EvaluateResults", "/@", 
+        RowBox[{
+        "ZeroMagneticFieldMagPosition", "/@", " ", "PositionsPoles"}]}], ",", 
+       " ", 
+       RowBox[{"EvaluateResults", "/@", 
+        RowBox[{
+        "ZeroMagneticFieldMagPosition", "/@", " ", "PositionsRandom"}]}]}], 
+      "}"}]}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"zeroVecs", " ", "=", " ", 
+   RowBox[{"ToJson", "[", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"\"\<poles\>\"", ",", " ", "\"\<random\>\""}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"EvaluateResults", "/@", 
+        RowBox[{
+        "ZeroMagneticFieldVecPosition", "/@", " ", "PositionsPoles"}]}], ",", 
+       " ", 
+       RowBox[{"EvaluateResults", "/@", 
+        RowBox[{
+        "ZeroMagneticFieldVecPosition", "/@", " ", "PositionsRandom"}]}]}], 
+      "}"}]}], "]"}]}], ";"}], "\[IndentingNewLine]"}], "Input",
+ CellChangeTimes->{{3.822361731123477*^9, 3.822361798516947*^9}, {
+   3.822361830538398*^9, 3.8223618768695383`*^9}, {3.822361910050782*^9, 
+   3.8223619211656227`*^9}, {3.8223619682784767`*^9, 3.822362015057022*^9}, {
+   3.822362052917132*^9, 3.8223620873175592`*^9}, {3.822362232326294*^9, 
+   3.822362247816451*^9}, {3.8223623082392683`*^9, 3.822362341321455*^9}, {
+   3.822362525057569*^9, 3.822362526911294*^9}, {3.822362566785129*^9, 
+   3.822362645331428*^9}, {3.822362697802122*^9, 3.822362739020234*^9}, {
+   3.8223628377943983`*^9, 3.822362843542068*^9}, 3.822363329661458*^9},
+ CellLabel->
+  "In[907]:=",ExpressionUUID->"88cd68a8-1513-49d1-8ea7-71eec09d823f"]
+},
+WindowSize->{1244, 1403},
+WindowMargins->{{Automatic, -2560}, {0, Automatic}},
+FrontEndVersion->"12.0 for Linux x86 (64-bit) (April 8, 2019)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[558, 20, 152, 3, 31, "Input",ExpressionUUID->"a9bcb3be-33ef-4f88-ada6-46cf0ba60b3d"],
+Cell[713, 25, 881, 23, 31, "Input",ExpressionUUID->"a11dce8a-13a0-4031-98b5-904597797f91"],
+Cell[1597, 50, 4358, 115, 331, "Input",ExpressionUUID->"9532e7ce-ed53-451c-863c-06fec2d7cdbc"],
+Cell[5958, 167, 2083, 52, 216, "Input",ExpressionUUID->"83637970-7d69-4a25-a074-f5400149f1c3"],
+Cell[8044, 221, 300, 5, 31, "Input",ExpressionUUID->"3e8a4eeb-8f97-4068-8d2f-dce9bf385fb9"],
+Cell[8347, 228, 2927, 74, 273, "Input",ExpressionUUID->"88cd68a8-1513-49d1-8ea7-71eec09d823f"]
+}
+]
+*)
+

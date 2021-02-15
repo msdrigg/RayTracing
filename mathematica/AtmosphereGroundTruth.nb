@@ -1,0 +1,340 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 12.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[     12917,        332]
+NotebookOptionsPosition[     12337,        316]
+NotebookOutlinePosition[     12676,        331]
+CellTagsIndexPosition[     12633,        328]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"ToJson", "[", 
+   RowBox[{"keys_", ",", "values_"}], "]"}], ":=", 
+  RowBox[{"ExportString", "[", 
+   RowBox[{
+    RowBox[{"MapThread", "[", 
+     RowBox[{
+      RowBox[{"Function", "[", 
+       RowBox[{
+        RowBox[{"{", 
+         RowBox[{"x", ",", "y"}], "}"}], ",", " ", 
+        RowBox[{
+         RowBox[{"ToString", "[", "x", "]"}], "\[Rule]", "y"}]}], "]"}], ",", 
+      " ", 
+      RowBox[{"{", 
+       RowBox[{"keys", ",", "values"}], "}"}]}], "]"}], ",", " ", 
+    "\"\<JSON\>\""}], "]"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"AtmosphereNames", " ", "=", " ", 
+   RowBox[{"{", "\[IndentingNewLine]", 
+    RowBox[{
+    "\"\<atm1\>\"", ",", " ", "\"\<atm2\>\"", ",", " ", "\"\<atm3\>\""}], 
+    "\[IndentingNewLine]", "}"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"Atmospheres", " ", "=", " ", 
+   RowBox[{"{", "\[IndentingNewLine]", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"6571000", ",", "6411000", ",", 
+       RowBox[{"4.9", "*", 
+        RowBox[{"10", "^", "13"}]}]}], "}"}], ",", "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{"6871000", ",", "6721000", ",", 
+       RowBox[{"4.9", "*", 
+        RowBox[{"10", "^", "13"}]}]}], "}"}], ",", "\[IndentingNewLine]", 
+     RowBox[{"{", 
+      RowBox[{"6471000", ",", "6421000", ",", "2.89*^14"}], "}"}]}], 
+    "\[IndentingNewLine]", "}"}]}], ";"}]}], "Input",
+ CellChangeTimes->{{3.82235257788382*^9, 3.822352656642578*^9}, {
+   3.822353449440526*^9, 3.822353464757996*^9}, {3.8223585764513397`*^9, 
+   3.822358577017572*^9}, 3.822358633202821*^9, {3.822358665558702*^9, 
+   3.82235866633902*^9}},
+ CellLabel->"In[1]:=",ExpressionUUID->"c492507a-a59a-45d5-a29d-10c954ede8d5"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{
+   RowBox[{"QPGetPlasmaFrequencySquared", "[", 
+    RowBox[{"rm_", ",", " ", "rb_", ",", " ", "pf2max_", ",", " ", "r_"}], 
+    "]"}], ":=", 
+   RowBox[{"Max", "[", 
+    RowBox[{
+     RowBox[{"pf2max", "*", 
+      RowBox[{"(", 
+       RowBox[{"1", " ", "-", " ", 
+        RowBox[{
+         RowBox[{
+          RowBox[{"(", 
+           RowBox[{"r", " ", "-", " ", "rm"}], ")"}], "^", "2"}], 
+         RowBox[{
+          RowBox[{"rb", "^", "2"}], "/", 
+          RowBox[{
+           RowBox[{"(", 
+            RowBox[{
+             RowBox[{"(", 
+              RowBox[{"rm", " ", "-", "rb"}], ")"}], "r"}], ")"}], "^", 
+           "2"}]}]}]}], ")"}]}], ",", " ", "0"}], "]"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"QPHighestPoint", "[", 
+    RowBox[{"rb_", ",", "rm_"}], "]"}], ":=", " ", 
+   RowBox[{"rm", " ", 
+    RowBox[{"rb", " ", "/", " ", 
+     RowBox[{"(", 
+      RowBox[{"rb", " ", "-", " ", 
+       RowBox[{"(", 
+        RowBox[{"rm", " ", "-", " ", "rb"}], ")"}]}], ")"}]}]}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"QPInAtmospherePositionsResults", "[", 
+   RowBox[{"rm_", ",", " ", "rb_", ",", " ", "pf2max_"}], "]"}], " ", ":=", 
+  " ", 
+  RowBox[{"Module", "[", 
+   RowBox[{
+    RowBox[{"{", "ym", "}"}], ",", "\[IndentingNewLine]", 
+    RowBox[{
+     RowBox[{"ym", " ", "=", " ", 
+      RowBox[{"rm", " ", "-", " ", "rb"}]}], ";", "\[IndentingNewLine]", 
+     RowBox[{"Table", "[", 
+      RowBox[{
+       RowBox[{"Simplify", "[", 
+        RowBox[{"Module", "[", 
+         RowBox[{
+          RowBox[{"{", "pt", "}"}], ",", 
+          RowBox[{
+           RowBox[{"pt", "=", 
+            RowBox[{
+             RowBox[{"rb", " ", "*", 
+              RowBox[{"i", "/", "10"}]}], " ", "+", " ", 
+             RowBox[{
+              RowBox[{"QPHighestPoint", "[", 
+               RowBox[{"rb", ",", " ", "rm"}], "]"}], "*", 
+              RowBox[{
+               RowBox[{"(", 
+                RowBox[{"10", "-", "i"}], ")"}], "/", "10"}]}]}]}], ";", 
+           RowBox[{"{", 
+            RowBox[{"pt", ",", 
+             RowBox[{"QPGetPlasmaFrequencySquared", "[", 
+              RowBox[{
+              "rm", ",", " ", "rb", ",", " ", "pf2max", ",", " ", "pt"}], 
+              "]"}]}], "}"}]}]}], "]"}], "]"}], ",", " ", 
+       RowBox[{"{", 
+        RowBox[{"i", ",", " ", "0", ",", " ", "10"}], "}"}]}], "]"}]}]}], 
+   "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"QPBelowAtmospherePositionsResults", "[", 
+   RowBox[{"rm_", ",", " ", "rb_", ",", " ", "pf2max_"}], "]"}], " ", ":=", 
+  " ", 
+  RowBox[{"Table", "[", 
+   RowBox[{
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"rb", "*", 
+       RowBox[{"i", "/", "10"}]}], ",", " ", 
+      RowBox[{"QPGetPlasmaFrequencySquared", "[", 
+       RowBox[{"rm", ",", " ", "rb", ",", " ", "pf2max", ",", " ", 
+        RowBox[{"rb", "*", 
+         RowBox[{"i", "/", "10"}]}]}], "]"}]}], "}"}], ",", " ", 
+    RowBox[{"{", 
+     RowBox[{"i", ",", " ", "0", ",", " ", "10"}], "}"}]}], 
+   "]"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"QPAboveAtmospherePositionsResults", "[", 
+   RowBox[{"rm_", ",", " ", "rb_", ",", " ", "pf2max_"}], "]"}], ":=", " ", 
+  RowBox[{"Table", "[", 
+   RowBox[{
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"QPHighestPoint", "[", 
+        RowBox[{"rb", ",", "rm"}], "]"}], "*", 
+       RowBox[{"(", 
+        RowBox[{"1", " ", "+", " ", 
+         RowBox[{"i", "/", "10"}]}], ")"}]}], ",", " ", 
+      RowBox[{"QPGetPlasmaFrequencySquared", "[", 
+       RowBox[{"rm", ",", " ", "rb", ",", " ", "pf2max", ",", " ", 
+        RowBox[{
+         RowBox[{"QPHighestPoint", "[", 
+          RowBox[{"rb", ",", "rm"}], "]"}], "*", 
+         RowBox[{"(", 
+          RowBox[{"1", " ", "+", " ", 
+           RowBox[{"i", "/", "10"}]}], ")"}]}]}], "]"}]}], "}"}], ",", " ", 
+    RowBox[{"{", 
+     RowBox[{"i", ",", " ", "0", ",", " ", "10"}], "}"}]}], 
+   "]"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"StandardizeAtmosphereParams", "[", "params_", "]"}], ":=", 
+  RowBox[{"{", 
+   RowBox[{
+    RowBox[{"params", "[", 
+     RowBox[{"[", "1", "]"}], "]"}], ",", " ", 
+    RowBox[{
+     RowBox[{"params", "[", 
+      RowBox[{"[", "1", "]"}], "]"}], " ", "-", " ", 
+     RowBox[{"params", "[", 
+      RowBox[{"[", "2", "]"}], "]"}]}], ",", " ", 
+    RowBox[{"params", "[", 
+     RowBox[{"[", "3", "]"}], "]"}]}], "}"}]}]}], "Input",
+ CellChangeTimes->{{3.822352597814089*^9, 3.822352597822394*^9}, {
+  3.822352679535378*^9, 3.822352764709371*^9}, {3.822353587850301*^9, 
+  3.82235359240623*^9}, {3.822354742583499*^9, 3.8223547874377937`*^9}, {
+  3.822363637394991*^9, 3.822363670831318*^9}, {3.822363794440606*^9, 
+  3.8223637947483473`*^9}, {3.822366230427938*^9, 3.822366234453618*^9}},
+ CellLabel->"In[16]:=",ExpressionUUID->"4378fe16-81d8-4d09-a4e1-4c8a738c4061"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"ToJson", "[", 
+   RowBox[{"AtmosphereNames", ",", 
+    RowBox[{"StandardizeAtmosphereParams", "/@", "Atmospheres"}]}], "]"}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ToJson", "[", 
+   RowBox[{"AtmosphereNames", ",", " ", 
+    RowBox[{"Quiet", "[", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"QPBelowAtmospherePositionsResults", "@@@", "Atmospheres"}], "/.", 
+       RowBox[{"ComplexInfinity", "\[Rule]", "\[Infinity]"}]}], "/.", 
+      RowBox[{"\[Infinity]", "\[Rule]", "Null"}]}], "]"}]}], "]"}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ToJson", "[", 
+   RowBox[{"AtmosphereNames", ",", " ", 
+    RowBox[{"QPAboveAtmospherePositionsResults", "@@@", "Atmospheres"}]}], 
+   "]"}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ToJson", "[", 
+   RowBox[{"AtmosphereNames", ",", " ", 
+    RowBox[{"Quiet", "[", 
+     RowBox[{"QPInAtmospherePositionsResults", "@@@", "Atmospheres"}], 
+     "]"}]}], "]"}], ";"}]}], "Input",
+ CellChangeTimes->{{3.822353423077278*^9, 3.822353426215115*^9}, {
+   3.8223534683078613`*^9, 3.822353474930873*^9}, {3.822353506857061*^9, 
+   3.822353564748107*^9}, {3.8223536287500467`*^9, 3.8223537191057673`*^9}, {
+   3.8223537871536503`*^9, 3.822353799419024*^9}, {3.822353914470049*^9, 
+   3.8223539320311947`*^9}, 3.8223539643419447`*^9, {3.822354752285412*^9, 
+   3.822354787438377*^9}, {3.822358244695859*^9, 3.822358279847698*^9}, {
+   3.8223636750196657`*^9, 3.822363700899962*^9}, 3.822363788297529*^9, 
+   3.8223662479651203`*^9, {3.822367174600791*^9, 3.8223672126269827`*^9}},
+ CellLabel->"In[34]:=",ExpressionUUID->"0b8caa09-f116-494e-a8bd-371635ff8635"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{
+   RowBox[{"ChapGetPlasmaFrequencySquared", "[", 
+    RowBox[{"rm_", ",", " ", "rb_", ",", " ", "pf2max_", ",", " ", "r_"}], 
+    "]"}], ":=", 
+   RowBox[{"Module", "[", 
+    RowBox[{
+     RowBox[{"{", "zprime", "}"}], ",", "\[IndentingNewLine]", 
+     RowBox[{
+      RowBox[{"zprime", " ", "=", " ", 
+       RowBox[{
+        RowBox[{"(", 
+         RowBox[{"r", " ", "-", " ", "rm"}], ")"}], "/", 
+        RowBox[{"(", 
+         RowBox[{"rm", "-", "rb"}], ")"}]}]}], ";", "\[IndentingNewLine]", 
+      RowBox[{"pf2max", "*", 
+       RowBox[{"Exp", "[", 
+        RowBox[{
+         RowBox[{"1", "/", "2"}], "*", 
+         RowBox[{"(", 
+          RowBox[{"1", " ", "-", " ", "zprime", " ", "-", " ", 
+           RowBox[{"Exp", "[", 
+            RowBox[{"-", "zprime"}], "]"}]}], ")"}]}], "]"}]}]}]}], 
+    "\[IndentingNewLine]", "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ChapPositionsResults", "[", 
+   RowBox[{"rm_", ",", " ", "rb_", ",", " ", "pf2max_"}], "]"}], " ", ":=", 
+  " ", 
+  RowBox[{"Module", "[", 
+   RowBox[{
+    RowBox[{"{", "ym", "}"}], ",", "\[IndentingNewLine]", 
+    RowBox[{
+     RowBox[{"ym", " ", "=", " ", 
+      RowBox[{"rm", " ", "-", " ", "rb"}]}], ";", "\[IndentingNewLine]", 
+     RowBox[{"Table", "[", 
+      RowBox[{
+       RowBox[{"Simplify", "[", "\[IndentingNewLine]", 
+        RowBox[{"Module", "[", 
+         RowBox[{
+          RowBox[{"{", "pt", "}"}], ",", "\[IndentingNewLine]", 
+          RowBox[{
+           RowBox[{"pt", "=", 
+            RowBox[{"rm", " ", "+", 
+             RowBox[{"10", "*", 
+              RowBox[{"(", 
+               RowBox[{"4", "*", "ym", "*", 
+                RowBox[{
+                 RowBox[{"(", 
+                  RowBox[{"20", "-", "i"}], ")"}], "/", "20"}]}], ")"}]}]}]}],
+            ";", "\[IndentingNewLine]", 
+           RowBox[{"{", 
+            RowBox[{"pt", ",", 
+             RowBox[{"ChapGetPlasmaFrequencySquared", "[", 
+              RowBox[{
+              "rm", ",", " ", "rb", ",", " ", "pf2max", ",", " ", "pt"}], 
+              "]"}]}], "}"}]}]}], "\[IndentingNewLine]", "]"}], 
+        "\[IndentingNewLine]", "]"}], ",", " ", 
+       RowBox[{"{", 
+        RowBox[{"i", ",", " ", "0", ",", " ", "20"}], "}"}]}], "]"}]}]}], 
+   "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"ToJson", "[", 
+   RowBox[{"AtmosphereNames", ",", 
+    RowBox[{"ChapPositionsResults", "@@@", "Atmospheres"}]}], "]"}], 
+  ";"}]}], "Input",
+ CellChangeTimes->{{3.822353908528646*^9, 3.82235390957407*^9}, {
+   3.822353966350954*^9, 3.822354076412588*^9}, {3.8223543708979197`*^9, 
+   3.822354448120473*^9}, {3.822354579041209*^9, 3.822354590163822*^9}, {
+   3.82235483868547*^9, 3.822354844002236*^9}, {3.822355167698516*^9, 
+   3.822355195796028*^9}, {3.8223552653440104`*^9, 3.82235526558119*^9}, {
+   3.822355442826192*^9, 3.822355472572132*^9}, {3.822355533272994*^9, 
+   3.822355536292239*^9}, {3.822355762348197*^9, 3.822355818026155*^9}, {
+   3.822355855029978*^9, 3.822355875826804*^9}, {3.822355956136932*^9, 
+   3.82235597052402*^9}, {3.8223570000835133`*^9, 3.822357050518136*^9}, {
+   3.822357082426529*^9, 3.8223572749698353`*^9}, {3.8223573583100863`*^9, 
+   3.822357459919683*^9}, {3.822357518852857*^9, 3.822357572210842*^9}, {
+   3.822358208762331*^9, 3.822358241530046*^9}, 3.822358370637607*^9, {
+   3.8223586013182983`*^9, 3.822358605895399*^9}, 3.822363357431508*^9},
+ CellLabel->
+  "In[904]:=",ExpressionUUID->"de28b8e3-e3dd-4315-b0c1-76e0a9c8ba1b"]
+},
+WindowSize->{1280, 1376},
+WindowMargins->{{Automatic, -1352}, {27, Automatic}},
+FrontEndVersion->"12.0 for Linux x86 (64-bit) (April 8, 2019)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[558, 20, 1714, 43, 216, "Input",ExpressionUUID->"c492507a-a59a-45d5-a29d-10c954ede8d5"],
+Cell[2275, 65, 4873, 130, 216, "Input",ExpressionUUID->"4378fe16-81d8-4d09-a4e1-4c8a738c4061"],
+Cell[7151, 197, 1664, 35, 158, "Input",ExpressionUUID->"0b8caa09-f116-494e-a8bd-371635ff8635"],
+Cell[8818, 234, 3515, 80, 331, "Input",ExpressionUUID->"de28b8e3-e3dd-4315-b0c1-76e0a9c8ba1b"]
+}
+]
+*)
+
