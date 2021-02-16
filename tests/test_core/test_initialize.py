@@ -14,7 +14,11 @@ from atmosphere import quasi_parabolic as qp_atmosphere
 SHOULD_PLOT_GRAPHS = True
 
 
-class TestQuasiParabolicBaseParams(TestCase):
+def convert_old_to_new_qp_params(*params):
+    return params[0], params[0] - params[1], params[2]
+
+
+class TestQuasiParabolicBaseParams(base.UtilityTestMixin):
     instance1 = {
         "f": 16E6,
         "fc": 8.875E6,
@@ -47,7 +51,7 @@ class TestQuasiParabolicBaseParams(TestCase):
         Tests calculate_param_a, calculate_param_b, calculate_param_c, calculate_param_x_b, calculate_param_beta_b
         """
         for instance in [self.instance1, self.instance2]:
-            atmosphere_params = (
+            atmosphere_params = convert_old_to_new_qp_params(
                 instance["rm"], instance["rb"], instance["fc"] ** 2
             )
             operating_frequency = instance["f"]
@@ -57,11 +61,11 @@ class TestQuasiParabolicBaseParams(TestCase):
             test_betab = initialize.calculate_param_beta_b(instance["beta0"], instance["rb"])
             test_xb = initialize.calculate_param_x_b(instance["beta0"], instance["rb"])
 
-            base.assert_is_close(instance["a"], test_a, rel_tol=1E-6)
-            base.assert_is_close(instance["b"], test_b, rel_tol=1E-6)
-            base.assert_is_close(instance["c"], test_c, rel_tol=1E-6)
-            base.assert_is_close(instance["betab"], test_betab, rel_tol=1E-6)
-            base.assert_is_close(instance["xb"], test_xb, rel_tol=1E-6)
+            self.assert_is_close(instance["a"], test_a, rel_tol=1E-6)
+            self.assert_is_close(instance["b"], test_b, rel_tol=1E-6)
+            self.assert_is_close(instance["c"], test_c, rel_tol=1E-6)
+            self.assert_is_close(instance["betab"], test_betab, rel_tol=1E-6)
+            self.assert_is_close(instance["xb"], test_xb, rel_tol=1E-6)
 
     atmosphere_1 = (200E3 + coords.EARTH_RADIUS, 40E3 + coords.EARTH_RADIUS, 7E6**2, 10E6)
     atmosphere_2 = (500E3 + coords.EARTH_RADIUS, 350E3 + coords.EARTH_RADIUS, 7E6**2, 10E6)
@@ -79,12 +83,12 @@ class TestQuasiParabolicBaseParams(TestCase):
         for system_params, expected_result in [(self.atmosphere_1, 0.340804), (self.atmosphere_2, 0.613972),
                                                (self.atmosphere_3, 0.280384), (self.atmosphere_4, None)]:
             frequency = system_params[3]
-            atmosphere_params = system_params[:3]
+            atmosphere_params = convert_old_to_new_qp_params(*system_params[:3])
             if expected_result is None:
                 with self.assertRaises(ValueError):
                     initialize.get_angle_of_shortest_path(frequency, *atmosphere_params)
             else:
-                base.assert_is_close(
+                self.assert_is_close(
                     initialize.get_angle_of_shortest_path(frequency, *atmosphere_params),
                     expected_result, rel_tol=1E-5
                 )
@@ -106,10 +110,10 @@ class TestQuasiParabolicBaseParams(TestCase):
         # Testing raw derivative
         for system_params, angle_params in [(self.atmosphere_1, test_angle_params_1),
                                             (self.atmosphere_2, test_angle_params_2)]:
-            atmosphere_params = system_params[:3]
+            atmosphere_params = convert_old_to_new_qp_params(*system_params[:3])
             operating_frequency = system_params[3]
             for angle, expected_derivative in angle_params:
-                base.assert_is_close(
+                self.assert_is_close(
                     initialize.ground_distance_derivative(
                         angle, operating_frequency, *atmosphere_params
                     ),
@@ -124,12 +128,12 @@ class TestQuasiParabolicBaseParams(TestCase):
         for system_params, expected_result in [(self.atmosphere_1, 0.743177), (self.atmosphere_2, 0.691971),
                                                (self.atmosphere_3, 0.502671), (self.atmosphere_4, None)]:
             frequency = system_params[3]
-            atmosphere_params = system_params[:3]
+            atmosphere_params = convert_old_to_new_qp_params(*system_params[:3])
             if expected_result is None:
                 with self.assertRaises(ValueError):
                     initialize.get_pedersen_angle(frequency, *atmosphere_params)
             else:
-                base.assert_is_close(
+                self.assert_is_close(
                     initialize.get_pedersen_angle(frequency, *atmosphere_params),
                     expected_result,
                     rel_tol=1E-6
@@ -140,12 +144,12 @@ class TestQuasiParabolicBaseParams(TestCase):
             (self.atmosphere_1, math.pi/8, 6440033), (self.atmosphere_2, math.pi/5, 6817028.),
                 (self.atmosphere_3, math.pi/3, None), (self.atmosphere_4, math.pi/4, 6433896.)]:
             frequency = system_params[3]
-            atmosphere_params = system_params[:3]
+            atmosphere_params = convert_old_to_new_qp_params(*system_params[:3])
             if expected_result is None:
                 with self.assertRaises(ValueError):
                     initialize.get_apogee_height(launch_angle, frequency, *atmosphere_params)
             else:
-                base.assert_is_close(
+                self.assert_is_close(
                     initialize.get_apogee_height(launch_angle, frequency, *atmosphere_params),
                     expected_result, rel_tol=1E-6
                 )
@@ -160,12 +164,12 @@ class TestQuasiParabolicBaseParams(TestCase):
                 (self.atmosphere_3, math.pi/3, None),
                 (self.atmosphere_4, math.pi/4, 75946.49213141459)]:
             frequency = system_params[3]
-            atmosphere_params = system_params[:3]
+            atmosphere_params = convert_old_to_new_qp_params(*system_params[:3])
             if expected_result is None:
                 with self.assertRaises(ValueError):
                     initialize.get_apogee_ground_distance(launch_angle, frequency, *atmosphere_params)
             else:
-                base.assert_is_close(
+                self.assert_is_close(
                     initialize.get_apogee_ground_distance(launch_angle, frequency, *atmosphere_params),
                     expected_result, rel_tol=1E-6
                 )
@@ -226,14 +230,23 @@ class TestQuasiParabolicBaseParams(TestCase):
 
             if expected_result is None:
                 with self.assertRaises(ValueError):
-                    initialize.get_qp_heights(launch_angle, np.zeros(10), frequency, *atmosphere_params)
+                    initialize.get_qp_heights(
+                        launch_angle,
+                        np.zeros(10),
+                        frequency,
+                        *convert_old_to_new_qp_params(*atmosphere_params)
+                    )
             else:
                 distances = list(expected_result.keys())
                 heights = [expected_result[key] for key in distances]
                 dists_numpy = np.array(distances)
                 expected_heights_numpy = np.array(heights)
                 result_heights_numpy = initialize.get_qp_heights(
-                    launch_angle, dists_numpy, frequency, *atmosphere_params) - coords.EARTH_RADIUS
+                    launch_angle,
+                    dists_numpy,
+                    frequency,
+                    *convert_old_to_new_qp_params(*atmosphere_params)
+                ) - coords.EARTH_RADIUS
 
                 np.testing.assert_allclose(
                     expected_heights_numpy, result_heights_numpy, rtol=1E-7, atol=1E-5
@@ -405,6 +418,17 @@ class TestQuasiParabolicBaseParams(TestCase):
         400301.7359215451: 9.313225746154785e-10
     }
 
+    atmosphere_param_list = [
+        (atmosphere_1, math.pi/20*coords.EARTH_RADIUS,
+            (atm_1_height_results_1, atm_1_height_results_2)),
+        (atmosphere_2, 1402928 + 1,
+            (atm_2_height_results_1, atm_2_height_results_2)),
+        (atmosphere_3, math.pi/30*coords.EARTH_RADIUS,
+            None),
+        (atmosphere_4, math.pi/50*coords.EARTH_RADIUS,
+            (atm_4_height_results_1,))
+    ]
+
     def test_get_qp_path(self):
         """
         Tests python code against mathematica.
@@ -412,15 +436,9 @@ class TestQuasiParabolicBaseParams(TestCase):
         atm_n_height_results_m signifies the m 'th ray in system_params n.
         m is 1 or 2 (for high/low ray) and n is anything
         """
-
-        for system_params, ground_distance, expected_results in [
-            (self.atmosphere_1, math.pi/20*coords.EARTH_RADIUS,
-                (self.atm_1_height_results_1, self.atm_1_height_results_2)),
-                (self.atmosphere_2, 1402928 + 1, (self.atm_2_height_results_1, self.atm_2_height_results_2)),
-                (self.atmosphere_3, math.pi/30*coords.EARTH_RADIUS, None),
-                (self.atmosphere_4, math.pi/50*coords.EARTH_RADIUS, (self.atm_4_height_results_1,))]:
+        for system_params, ground_distance, expected_results in self.atmosphere_param_list:
             operating_frequency = system_params[3]
-            atmosphere_params = system_params[:3]
+            atmosphere_params = convert_old_to_new_qp_params(*system_params[:3])
             if expected_results is None:
                 with self.assertRaises(ValueError):
                     initialize.get_quasi_parabolic_path(
@@ -441,16 +459,11 @@ class TestQuasiParabolicBaseParams(TestCase):
 
     def test_plotting_path(self):
         if SHOULD_PLOT_GRAPHS:
-            for system_params, ground_distance, expected_results in [
-                (self.atmosphere_1, math.pi/20*coords.EARTH_RADIUS,
-                    (self.atm_1_height_results_1, self.atm_1_height_results_2)),
-                    (self.atmosphere_2, 1402928 + 1, (self.atm_2_height_results_1, self.atm_2_height_results_2)),
-                    (self.atmosphere_3, math.pi/30*coords.EARTH_RADIUS, None),
-                    (self.atmosphere_4, math.pi/50*coords.EARTH_RADIUS, (self.atm_4_height_results_1,))]:
+            for system_params, ground_distance, expected_results in self.atmosphere_param_list:
                 if expected_results is not None:
                     point_count = len(expected_results[0])
                     frequency = system_params[3]
-                    atmosphere_parameters = system_params[:3]
+                    atmosphere_parameters = convert_old_to_new_qp_params(*system_params[:3])
                     result_paths = initialize.get_quasi_parabolic_path(
                         ground_distance,
                         frequency,
@@ -461,15 +474,15 @@ class TestQuasiParabolicBaseParams(TestCase):
                     names = ("High", "Low")
                     colors = ("black", "white")
 
-                    semi_width = atmosphere_parameters[0] - atmosphere_parameters[1]
+                    semi_width = atmosphere_parameters[1]
                     max_height = max(
-                        (atmosphere_parameters[1] + 2 * semi_width - coords.EARTH_RADIUS) * 1.05 / 1000,
+                        (atmosphere_parameters[0] + semi_width - coords.EARTH_RADIUS) * 1.1 / 1000,
                         np.amax(result_paths[0][:, 1] - coords.EARTH_RADIUS) / 1000
                     )
 
                     # We can pass None to r because we pass a vector to r_norm, and qp atmosphere only needs the norm
                     fig, ax = plotting.visualize_atmosphere(
-                        lambda a: np.sqrt(qp_atmosphere.calculate_plasma_frequency(
+                        lambda a: np.sqrt(qp_atmosphere.calculate_plasma_frequency_squared(
                             None, a[:, 0], *atmosphere_parameters)),
                         np.array([coords.EARTH_RADIUS, 0, 0]),
                         np.array([coords.EARTH_RADIUS, result_paths[0][-1, 0] / coords.EARTH_RADIUS, 0]),
@@ -490,6 +503,7 @@ class TestQuasiParabolicBaseParams(TestCase):
                         np.testing.assert_allclose(
                             expected_combined, gotten, rtol=1E-7, atol=1E-4
                         )
+
                         if fig is not None:
                             plotting.visualize_path(gotten, show=False, fig=fig, ax=ax, color=color,
                                                     ray_type=name, frequency=frequency)

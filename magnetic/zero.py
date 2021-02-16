@@ -38,6 +38,6 @@ def calculate_magnetic_field_unit_vec(
 
     # We can't actually return a 0 vector.
     # We need it to be normalized, so we return a constant vector whose only component is a unit z component
-    result[:, 2] = 1
+    result[..., 2] = 1
 
     return result

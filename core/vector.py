@@ -18,7 +18,7 @@ def row_dot_product(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.einsum('ij,ij->i', np.atleast_2d(a), np.atleast_2d(b))
 
 
-def normalize_rows(a: np.ndarray) -> np.ndarray:
+def normalize_last_axis(a: np.ndarray) -> np.ndarray:
     """
     Normalized the provided vector row-wise
     :param a: An array of shape (N, M)

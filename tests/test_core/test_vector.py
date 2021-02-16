@@ -10,7 +10,7 @@ import math
 import numpy as np
 
 
-class TestAngleBetweenVectorCollections(TestCase):
+class TestAngleBetweenVectorCollections(base.UtilityTestMixin):
     test_vector_1d_1 = np.arange(3)
     test_vector_1d_2 = np.zeros(32)
     test_vector_1d_3 = np.ones(3)
@@ -74,7 +74,7 @@ class TestAngleBetweenVectorCollections(TestCase):
             self.test_vector_1d_1,
             self.test_vector_1d_3
         ).item()
-        base.assert_is_close(angle, self.angle_1d_expected)
+        self.assert_is_close(angle, self.angle_1d_expected)
 
     def test_failure_on_unequal_length(self):
         with self.assertRaises(ValueError):
@@ -103,7 +103,7 @@ class TestNormalizeRows(TestCase):
             spherical_vecs_normalized[:, 0] = 1
             cartesian_vecs_normalized = coords.spherical_to_cartesian(spherical_vecs_normalized)
             np_test.assert_allclose(
-                normalize_rows(cartesian_vec),
+                normalize_last_axis(cartesian_vec),
                 cartesian_vecs_normalized
             )
 
@@ -114,7 +114,7 @@ class TestNormalizeRows(TestCase):
             spherical_vecs_normalized = spherical_vec
             spherical_vecs_normalized[0] = 1
             cartesian_vecs_normalized = coords.spherical_to_cartesian(spherical_vecs_normalized)
-            normalized_rows = normalize_rows(cartesian_vec)
+            normalized_rows = normalize_last_axis(cartesian_vec)
             self.assertEqual(len(normalized_rows.squeeze().shape), 1)
             np_test.assert_allclose(
                 normalized_rows,
@@ -123,12 +123,12 @@ class TestNormalizeRows(TestCase):
 
     def test_zero_vectors(self):
         with self.assertWarns(RuntimeWarning):
-            zeros_normalized = normalize_rows(np.zeros(4))
+            zeros_normalized = normalize_last_axis(np.zeros(4))
         np.testing.assert_equal(
             zeros_normalized, np.zeros(4)
         )
         with self.assertWarns(RuntimeWarning):
-            normalized_rows = normalize_rows(np.arange(10).reshape((10, 1)))
+            normalized_rows = normalize_last_axis(np.arange(10).reshape((10, 1)))
         expected = np.arange(10).reshape((10, 1))
         expected[1:, :] = 1
         np.testing.assert_equal(

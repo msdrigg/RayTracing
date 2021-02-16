@@ -16,7 +16,7 @@ def create_parameters_shared_memory(
     :param path_parameters: The numpy array to write
     :returns: The newly created shared memory
     """
-    total_array = np.concatenate((path_parameters[0].size, *path_parameters))
+    total_array = np.concatenate((np.atleast_1d(path_parameters[0].size), *path_parameters))
     memory = shared_memory.SharedMemory(
         create=True,
         size=total_array.nbytes
@@ -45,7 +45,7 @@ def read_array_shared_memory(
 
     memory_array = np.ndarray(shape=(shape,), dtype=float, buffer=memory.buf)
 
-    if abs(round(memory_array) - memory_array[0]) > 1E-15:
+    if abs(round(memory_array[0]) - memory_array[0]) > 1E-15:
         raise ValueError("First memory position needs to be an integer value representing the "
                          "radial parameter count")
 

@@ -10,7 +10,7 @@ E_MASS = 9.10938356E-31  # kg
 C = 2.998E8  # m / s
 PI = 3.141592653589793  # unit-less
 EPSILON_0 = 8.854187817E-12  # F / m
-B_FACTOR = E_CHARGE / (2 * PI * E_MASS)  # Used to calculate gyro frequency
+B_FACTOR = E_CHARGE / (2 * PI * E_MASS)  # Factor converting field magnitude to gyro frequency
 TYPE_ABBREVIATION = {'QuasiParabolic': 'QP',
                      'GreatCircleDeviation': "GCD"}
 

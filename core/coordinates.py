@@ -22,15 +22,14 @@ def geographic_to_spherical(geographic: np.ndarray) -> np.ndarray:
     :param geographic: An array of shape (N, 2) with rows being (latitude, longitude)
     :return: An array of shape (N, 3) with rows the spherical coordinates corresponding to the provided locations
     """
-    geographic_vectorized = np.atleast_2d(geographic)
-    if np.any(geographic_vectorized[:, 2] < - EARTH_RADIUS):
+    if np.any(geographic[..., 2] < - EARTH_RADIUS):
         warnings.warn(RuntimeWarning("Getting at least one geographic vectors with altitudes less than -EARTH_RADIUS"))
-    spherical = np.empty_like(geographic_vectorized, dtype=float)
-    spherical[:, 0] = geographic_vectorized[:, 2] + EARTH_RADIUS
-    spherical[:, 1] = (90 + geographic_vectorized[:, 0]) * math.pi / 180
-    spherical[:, 2] = geographic_vectorized[:, 1] * math.pi / 180
+    spherical = np.empty_like(geographic, dtype=float)
+    spherical[..., 0] = geographic[..., 2] + EARTH_RADIUS
+    spherical[..., 1] = (90 + geographic[..., 0]) * math.pi / 180
+    spherical[..., 2] = geographic[..., 1] * math.pi / 180
 
-    return spherical
+    return spherical.reshape(geographic.shape)
 
 
 # This performs the inverse of geographic_to_spherical
@@ -41,44 +40,41 @@ def spherical_to_geographic(spherical: np.ndarray) -> np.ndarray:
     :return: An array of size (N, 2) with rows being (latitude, longitude),
      which correspond to the provided coordinates
     """
-    spherical_vectorized = np.atleast_2d(spherical)
-    if np.any(spherical_vectorized[:, 0] < 0):
+    if np.any(spherical[..., 0] < 0):
         warnings.warn(RuntimeWarning("Getting at least one spherical vectors with radius's less than 0"))
-    geographic = np.empty_like(spherical_vectorized, dtype=float)
-    geographic[:, 0] = 180 / math.pi * spherical_vectorized[:, 1] - 90
-    geographic[:, 1] = spherical_vectorized[:, 2] * 180 / math.pi
-    geographic[:, 2] = spherical_vectorized[:, 0] - EARTH_RADIUS
+    geographic = np.empty_like(spherical, dtype=float)
+    geographic[..., 0] = 180 / math.pi * spherical[..., 1] - 90
+    geographic[..., 1] = spherical[..., 2] * 180 / math.pi
+    geographic[..., 2] = spherical[..., 0] - EARTH_RADIUS
 
-    return geographic
+    return geographic.reshape(spherical.shape)
 
 
 def spherical_to_cartesian(spherical: np.ndarray) -> np.ndarray:
     """Returns the cartesian form of the spherical vector.
         spherical_vector can be a numpy array where rows are spherical vectors
         (or a single vector)"""
-    spherical_vector = np.atleast_2d(spherical)
-    cartesian_vector = np.empty_like(spherical_vector, dtype=float)
+    cartesian = np.empty_like(spherical, dtype=float)
 
-    cartesian_vector[:, 0] = spherical_vector[:, 0] * np.sin(spherical_vector[:, 1]) * np.cos(spherical_vector[:, 2])
-    cartesian_vector[:, 1] = spherical_vector[:, 0] * np.sin(spherical_vector[:, 1]) * np.sin(spherical_vector[:, 2])
-    cartesian_vector[:, 2] = spherical_vector[:, 0] * np.cos(spherical_vector[:, 1])
+    cartesian[..., 0] = spherical[..., 0] * np.sin(spherical[..., 1]) * np.cos(spherical[..., 2])
+    cartesian[..., 1] = spherical[..., 0] * np.sin(spherical[..., 1]) * np.sin(spherical[..., 2])
+    cartesian[..., 2] = spherical[..., 0] * np.cos(spherical[..., 1])
 
-    return cartesian_vector
+    return cartesian
 
 
 def cartesian_to_spherical(cartesian: np.ndarray) -> np.ndarray:
     """Returns the spherical form of the cartesian vector.
         cartesian can be a numpy array where rows are cartesian vectors
         (or a single vector)"""
-    cartesian_vector = np.atleast_2d(cartesian)
-    spherical_vector = np.empty_like(cartesian_vector, dtype=float)
+    spherical = np.empty_like(cartesian, dtype=float)
 
-    r = linalg.norm(cartesian_vector, axis=1)
-    spherical_vector[:, 0] = r
-    spherical_vector[:, 1] = np.arccos(cartesian_vector[:, 2] / r)
-    spherical_vector[:, 2] = np.arctan2(cartesian_vector[:, 1], cartesian_vector[:, 0])
+    r = linalg.norm(cartesian, axis=-1)
+    spherical[..., 0] = r
+    spherical[..., 1] = np.arccos(cartesian[..., 2] / r)
+    spherical[..., 2] = np.arctan2(cartesian[..., 1], cartesian[..., 0])
 
-    return spherical_vector
+    return spherical.reshape(cartesian.shape)
 
 
 # Converts a spherical coordinate to a coordinate in the form of
@@ -98,43 +94,43 @@ def standard_to_path_component(
     :return: coordinate or array of coordinates in path component form
     """
     if from_spherical:
-        spherical_vector = np.atleast_2d(standard)
-        cartesian_components = np.atleast_2d(spherical_to_cartesian(spherical_vector))
+        spherical = standard
+        cartesian = spherical_to_cartesian(standard)
     else:
-        cartesian_components = standard
-        spherical_vector = np.empty(1)
+        cartesian = standard
+        spherical = np.empty(1)
 
     # Path start and end
-    cartesian_start = spherical_to_cartesian(path_start_spherical).squeeze()
-    cartesian_end = spherical_to_cartesian(path_end_spherical).squeeze()
+    cartesian_start = spherical_to_cartesian(path_start_spherical)
+    cartesian_end = spherical_to_cartesian(path_end_spherical)
 
-    path_components = np.empty_like(cartesian_components, dtype=float)
+    path_components = np.empty_like(cartesian, dtype=float)
 
     normal_vec_to_plane = np.cross(cartesian_start, cartesian_end)
     unit_normal_vec = normal_vec_to_plane / linalg.norm(normal_vec_to_plane)
 
-    vector_normal_component = np.einsum("ij,j->i", cartesian_components, unit_normal_vec)
+    vector_normal_component = vector.row_dot_product(cartesian, unit_normal_vec)
 
-    vectors_projected_onto_plane = cartesian_components - \
+    vectors_projected_onto_plane = cartesian - \
         np.outer(vector_normal_component, unit_normal_vec)
 
-    path_components[:, 1] = vector.angle_between_vector_collections(
-        cartesian_start.reshape(-1, 3),
+    path_components[..., 1] = vector.angle_between_vector_collections(
+        cartesian_start,
         vectors_projected_onto_plane
     ) * EARTH_RADIUS * np.sign(vector.row_dot_product(
-        np.cross(cartesian_start.reshape(-1, 3), vectors_projected_onto_plane),
-        normal_vec_to_plane[np.newaxis, :])
+        np.cross(np.atleast_2d(cartesian_start), vectors_projected_onto_plane),
+        normal_vec_to_plane)
     )
 
-    path_components[:, 2] = vector.angle_between_vector_collections(
+    path_components[..., 2] = vector.angle_between_vector_collections(
         vectors_projected_onto_plane,
-        cartesian_components
+        cartesian
     ) * EARTH_RADIUS * np.sign(vector_normal_component)
 
     if from_spherical:
-        path_components[:, 0] = spherical_vector[:, 0] - EARTH_RADIUS
+        path_components[..., 0] = spherical[..., 0] - EARTH_RADIUS
     else:
-        path_components[:, 0] = linalg.norm(cartesian_components, axis=1) - EARTH_RADIUS
+        path_components[..., 0] = linalg.norm(cartesian, axis=-1) - EARTH_RADIUS
 
     return path_components
 
@@ -153,8 +149,6 @@ def path_component_to_standard(
     :param to_spherical: if true, return spherical, else return cartesian
     :return: coordinate or array of coordinates in spherical coordinates
     """
-    path_components_vector = np.atleast_2d(path_components)
-
     cartesian_start = spherical_to_cartesian(path_start_spherical)
     cartesian_end = spherical_to_cartesian(path_end_spherical)
 
@@ -163,11 +157,11 @@ def path_component_to_standard(
 
     # Make sure we have positive rotation vector
     rotations = Rotation.from_rotvec(
-        np.outer(path_components_vector[:, 1] / EARTH_RADIUS, unit_normal_vector_to_path)
+        np.outer(path_components[..., 1] / EARTH_RADIUS, unit_normal_vector_to_path)
     )
-    vecs_along_path = np.atleast_2d(rotations.apply(cartesian_start))
+    vecs_along_path = rotations.apply(cartesian_start)
 
-    perpendicular_rotation_vecs = np.cross(vecs_along_path, unit_normal_vector_to_path.reshape(-1, 3))
+    perpendicular_rotation_vecs = np.cross(np.atleast_2d(vecs_along_path), np.atleast_2d(unit_normal_vector_to_path))
     unit_rotation_vecs = np.einsum(
         'ij,i->ij', perpendicular_rotation_vecs,
         1 / linalg.norm(perpendicular_rotation_vecs, axis=1)
@@ -177,19 +171,19 @@ def path_component_to_standard(
         np.einsum(
             "ij,i->ij",
             unit_rotation_vecs,
-            path_components_vector[:, 2] / EARTH_RADIUS
+            np.atleast_1d(path_components[..., 2] / EARTH_RADIUS)
         )
     )
 
     cartesian_components = perpendicular_rotations.apply(vecs_along_path)
 
     if not to_spherical:
-        return cartesian_components
+        return cartesian_components.reshape(path_components.shape)
 
     spherical_components = np.atleast_2d(cartesian_to_spherical(cartesian_components))
 
-    spherical_components[:, 0] = path_components_vector[:, 0] + EARTH_RADIUS
-    return spherical_components
+    spherical_components[..., 0] = path_components[..., 0] + EARTH_RADIUS
+    return spherical_components.reshape(path_components.shape)
 
 
 def regularize_spherical_coordinates(coordinates: np.ndarray) -> np.ndarray:
@@ -198,6 +192,6 @@ def regularize_spherical_coordinates(coordinates: np.ndarray) -> np.ndarray:
     :param coordinates: coordinate or array of coordinates in spherical form
     :return: coordinates in spherical form, but this time with proper coordinates
     """
-    regularized = np.atleast_2d(cartesian_to_spherical(spherical_to_cartesian(coordinates)))
-    regularized[:, 2] = np.mod(regularized[:, 2] + 2 * math.pi, 2 * math.pi)
+    regularized = cartesian_to_spherical(spherical_to_cartesian(coordinates))
+    regularized[..., 2] = np.mod(regularized[..., 2] + 2 * math.pi, 2 * math.pi)
     return regularized

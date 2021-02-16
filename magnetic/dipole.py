@@ -26,12 +26,12 @@ def calculate_gyro_frequency(
     :returns: A vector whose elements are the gyro frequency evaluated at the provided cartesian coordinates
     """
     if norms is None:
-        norms = linalg.norm(position_vector, axis=1)
+        norms = linalg.norm(position_vector, axis=-1).flatten()
 
-    radii_cubed = np.power(norms, -3)
-    cos_thetas = np.atleast_2d(position_vector)[:, 2] / norms
-    
-    field_magnitude = B_MAX * EARTH_RADIUS_CUBED * radii_cubed * np.sqrt(1 + 3 * np.square(cos_thetas))
+    radii_inverse_cubed = np.power(norms, -3)
+    cos_thetas = position_vector[..., 2] / norms
+
+    field_magnitude = B_MAX * EARTH_RADIUS_CUBED * radii_inverse_cubed * np.sqrt(1 + 3 * np.square(cos_thetas))
     return constants.B_FACTOR * field_magnitude
 
 
@@ -48,10 +48,10 @@ def calculate_magnetic_field_unit_vec(
     :returns: A (N, 3) array whose rows are the magnetic field vectors in cartesian coordinates
     """
     if norms is None:
-        norms = linalg.norm(position_vector, axis=1)
+        norms = linalg.norm(position_vector, axis=-1)
 
-    unit_position_vectors = position_vector / norms
+    unit_position_vectors = position_vector / norms.reshape(-1, 1)
 
-    field_vector = 3 * unit_position_vectors * vector.row_dot_product(unit_position_vectors, MOMENT) - MOMENT
-
-    return vector.normalize_rows(field_vector)
+    field_vector = \
+        3 * unit_position_vectors * vector.row_dot_product(unit_position_vectors, MOMENT)[..., np.newaxis] - MOMENT
+    return vector.normalize_last_axis(field_vector).reshape(position_vector.shape)

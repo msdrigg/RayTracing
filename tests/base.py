@@ -7,7 +7,7 @@ from unittest import TestCase
 
 import numpy as np
 import numpy.testing as np_test
-from scipy import linalg
+from typing import *
 
 
 class UtilityTestMixin(TestCase):
@@ -18,74 +18,102 @@ class UtilityTestMixin(TestCase):
         self.assertTrue(
             math.isclose(num1, num2, rel_tol=rel_tol, abs_tol=abs_tol),
             f"Numbers are not within expected tolerance: "
-                                 f"abs_tol={rel_tol}, rel_tol={rel_tol}\n"
-                                 f"Number 1: {num1}, \nNumber 2: {num2}"
+            f"abs_tol={rel_tol}, rel_tol={rel_tol}\n"
+            f"Number 1: {num1}, \nNumber 2: {num2}"
         )
 
 
-class BaseNumpyCalculationVerifier(TestCase):
+class BaseNumpyCalculationVerifier(UtilityTestMixin):
+    default_atol = 1E-10
+    default_rtol = 1E-9
+
     # noinspection PyTypeChecker
     def calculate_target_value(self, *args, **kwargs) -> np.ndarray:
         self.fail("Not implemented in base class")
 
-    def verify_single_calculation_success(self, inputs, expected, *args, **kwargs):
-        if np.any(np.isnan(expected)):
-            with self.assertWarns(RuntimeWarning):
-                self.calculate_target_value(
-                    0, inputs, *args, **kwargs
-                )
-            return
+    # noinspection PyTypeChecker
+    def get_vector_success_inputs_outputs(self, vectors, expected) -> Tuple:
+        self.fail("Not implemented in base class")
 
+    # noinspection PyTypeChecker
+    def get_single_success_inputs_outputs(self, vectors, expected) -> List[Tuple[Any, ...]]:
+        self.fail("Not implemented in base class")
+
+    # noinspection PyTypeChecker
+    def get_single_failures(self, vectors, expected) -> Tuple:
+        self.fail("Not implemented in base class")
+
+    # noinspection PyTypeChecker
+    def get_vector_failures(self, vectors, expected) -> Tuple:
+        self.fail("Not implemented in base class")
+
+    # noinspection PyTypeChecker
+    def get_params(self) -> Tuple:
+        self.fail("Not implemented in base class")
+
+    def verify_single_calculation_success(self, inputs, expected):
         np_test.assert_allclose(
-            expected / 1E6 ** 2,
+            expected,
             self.calculate_target_value(
-                0, inputs, *args, **kwargs
-            ) / 1E6 ** 2,
-            atol=1E-10
+                *inputs, *self.get_params()
+            ),
+            atol=self.default_atol,
+            rtol=self.default_rtol
         )
 
-    def verify_failure(self, *args, **kwargs):
+    def verify_failure(self, inputs):
         # Check overall for noisy warning
         with self.assertWarns(RuntimeWarning):
             self.calculate_target_value(
-                *args, **kwargs
+                *inputs, *self.get_params()
             )
 
-    def verify_vectorized_calculation_success(self, inputs, expected, *args, **kwargs):
+    def verify_vectorized_calculation_success(self, inputs, expected):
         """
         This function checks a list of inputs
         """
-        nan_locations = np.isnan(expected)
-
-        # Check for correctness
-        real_value_loc = np.logical_not(nan_locations)
-        real_inputs = inputs[real_value_loc]
-        real_outputs = expected[real_value_loc]
-
         results = self.calculate_target_value(
-            0, real_inputs, *args, **kwargs
+            *inputs, *self.get_params()
         )
         np_test.assert_allclose(
-            real_outputs / 1E6 ** 2,
-            results / 1E6 ** 2,
-            atol=1E-10
+            expected,
+            results,
+            atol=self.default_atol,
+            rtol=self.default_rtol
+        )
+    
+    @staticmethod
+    def format_expected(vecs):
+        return vecs
+    
+    def run_test_suite(self, vectors, expected):
+        processed_outputs = self.format_expected(expected)
+        self.verify_vectorized_calculation_success(
+            *self.get_vector_success_inputs_outputs(vectors, processed_outputs)
         )
 
-    def run_test_suite(self, vectors, norms, expected):
-        self.verify_vectorized_calculation_success(vectors, norms, expected)
+        failure_vecs = self.get_vector_failures(vectors, processed_outputs)
+        if len(failure_vecs) > 0 and failure_vecs[0].size > 0:
+            self.verify_failure(
+                failure_vecs
+            )
 
-        # Check individual for noisy warning
-        for value in inputs:
-            with self.assertWarns(RuntimeWarning):
-                self.calculate_target_value(
-                    0, value, *args, **kwargs
-                )
+        for inputs in self.get_single_failures(vectors, processed_outputs):
+            self.verify_failure([inputs[i].reshape(1, -1) for i in range(len(inputs))])
 
-        for i in range(0, vectors.shape[0], 5):
-            self.verify_vectorized_calculation_success(vectors[i].reshape(1, -1), norms, expected)
+        for vec in self.get_single_failures(vectors, processed_outputs):
+            self.verify_single_calculation_success(vec, processed_outputs)
 
-        for i in range(0, vectors.shape[0], 5):
-            self.verify_single_calculation_success(vectors[i], norms, expected)
+        for inputs, outputs in self.get_single_success_inputs_outputs(vectors, processed_outputs):
+            new_inputs = list(inputs)
+            new_inputs[0] = inputs[0].reshape(1, -1)
+            self.verify_vectorized_calculation_success(
+                new_inputs,
+                outputs[np.newaxis]
+            )
+
+        for inputs, outputs in self.get_single_success_inputs_outputs(vectors, processed_outputs):
+            self.verify_single_calculation_success(inputs, outputs)
 
     @staticmethod
     def split_test_group(test_group):
@@ -104,7 +132,5 @@ class BaseNumpyCalculationVerifier(TestCase):
 
         for group in tests:
             vectors, calculations = self.split_test_group(tests[group])
-            norms = linalg.norm(vectors, axis=1)
 
-            self.run_test_suite(vectors, None, calculations)
-            self.run_test_suite(vectors, norms, calculations)
+            self.run_test_suite(vectors, calculations)

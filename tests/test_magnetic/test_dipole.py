@@ -7,7 +7,10 @@ from magnetic.dipole import *
 
 
 class DipoleGyroFrequencyTestCase(BaseGyroFrequencyTestCase):
-    gyro_frequency_calculations_file_name = "calculations/dipole_gyro_frequency_calculated.json"
+    gyro_frequency_calculations_file_name = os.path.join(
+        THIS_DIR,
+        "calculations/dipole_field_mag_calculated.json"
+    )
 
     # noinspection PyTypeChecker
     def calculate_target_value(self, *args, **kwargs) -> np.ndarray:
@@ -15,7 +18,10 @@ class DipoleGyroFrequencyTestCase(BaseGyroFrequencyTestCase):
 
 
 class DipoleFieldVecTestCase(BaseFieldVecTestCase):
-    field_vec_calculations_file_name = "calculations/dipole_field_vec_calculated.json"
+    field_vec_calculations_file_name = os.path.join(
+        THIS_DIR,
+        "calculations/dipole_field_vec_calculated.json"
+    )
 
     # noinspection PyTypeChecker
     def calculate_target_value(self, *args, **kwargs) -> np.ndarray:
