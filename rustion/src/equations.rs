@@ -2,7 +2,7 @@ const USE_ORDINARY_RAY: bool = true;
 const EPSILON: f64 = 1E-15;
 
 
-pub fn equation_13_root(x: f64, y: f64, yp: f64, yt: f64) -> f64 {
+pub fn equation_13_root(x: &f64, y: &f64, yp: &f64, yt: &f64) -> f64 {
     let pt = calc_pt(x, y, yp, yt);
     let dlog_dyp = equation_16(x, y, yp);
 
@@ -12,7 +12,7 @@ pub fn equation_13_root(x: f64, y: f64, yp: f64, yt: f64) -> f64 {
     pos + neg
 }
 
-pub fn calc_pt(x: f64, y: f64, yp: f64, yt: f64) -> f64 {
+pub fn calc_pt(x: &f64, y: &f64, yp: &f64, yt: &f64) -> f64 {
     let dlog_dyp = equation_16(x, y, yp);
     let denominator = (yp - dlog_dyp * y * y / 2.) + (dlog_dyp * yp * yp / 2.);
     
@@ -20,7 +20,7 @@ pub fn calc_pt(x: f64, y: f64, yp: f64, yt: f64) -> f64 {
 }
 
 /// Implementing equation 15 in Coleman 2011
-pub fn calculate_mu_squared(x: f64, y: f64, yp: f64) -> f64 {
+pub fn calculate_mu_squared(x: &f64, y: &f64, yp: &f64) -> f64 {
     //! We need x, y, yp to all have the same length
     let multiplier = if USE_ORDINARY_RAY {
         1.
@@ -43,17 +43,17 @@ pub fn calculate_mu_squared(x: f64, y: f64, yp: f64) -> f64 {
     }
 }
 
-pub fn calc_a(x: f64, y: f64, yp: f64) -> f64 {
+pub fn calc_a(x: &f64, y: &f64, yp: &f64) -> f64 {
     1. + x * yp * yp - (x + y * y)
 }
 
-pub fn calc_b(x: f64, y: f64, yp: f64) -> f64 {
+pub fn calc_b(x: &f64, y: &f64, yp: &f64) -> f64 {
     let neg = x * yp * yp + x * x + x * y * y / 2. + 1.;
     let pos = 2. * x + y * y;
     pos - neg
 }
 
-pub fn equation_16(x: f64, y: f64, yp: f64) -> f64 {
+pub fn equation_16(x: &f64, y: &f64, yp: &f64) -> f64 {
     
     let mu_squared = calculate_mu_squared(x, y, yp);
     let a = calc_a(x, y, yp);

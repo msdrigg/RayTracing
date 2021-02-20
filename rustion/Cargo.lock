@@ -821,6 +821,7 @@ dependencies = [
  "numpy",
  "openblas-src",
  "pyo3",
+ "serde",
 ]
 
 [[package]]
