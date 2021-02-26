@@ -49,7 +49,7 @@ class BaseNumpyCalculationVerifier(UtilityTestMixin):
 
     # noinspection PyTypeChecker
     def get_params(self) -> Tuple:
-        self.fail("Not implemented in base class")
+        return ()
 
     def verify_single_calculation_success(self, inputs, expected):
         np_test.assert_allclose(
