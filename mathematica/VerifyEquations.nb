@@ -59,8 +59,7 @@ Cell[BoxData[{
          "+", " ", 
          RowBox[{"CalcB", "[", 
           RowBox[{"x", ",", " ", "y", ",", " ", "yp"}], "]"}]}], 
-        ")"}]}]}]}]}], "\[IndentingNewLine]", 
-   "]"}]}], "\[IndentingNewLine]", 
+        ")"}]}]}]}]}], "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{"Equation15", "[", 
    RowBox[{"x_", ",", " ", "y_", ",", " ", "yp_"}], "]"}], ":=", 
