@@ -14,6 +14,8 @@ B_FACTOR = E_CHARGE / (2 * PI * E_MASS)  # Factor converting field magnitude to 
 TYPE_ABBREVIATION = {'QuasiParabolic': 'QP',
                      'GreatCircleDeviation': "GCD"}
 
+EPSILON = 1E-15
+
 INTEGRATION_STEP_SIZE_FACTOR = 1E4
 
 DEFAULT_TRACER_PARALLEL_PARAMS = 50

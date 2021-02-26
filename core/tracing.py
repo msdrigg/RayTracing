@@ -40,12 +40,14 @@ def load_dynamic_modules(atmosphere_module_name: str, magnetic_field_module_name
 
 def solve_yp_pt(x: float, y: float, y_squared: float, yt: float):
     """
+    TODO: TEST WITH RUST VERSION. IT IS VECTORIZED AND SHOULD SPEED UP GREATLY
     Given the parameters, return the solution to yp
     :return: yp solved
     """
+    if abs(y) < constants.EPSILON:
+        return 0
+
     function_args = x, y_squared, yt
-    # TODO: Optimize this. This function gets run nearly 2000*2500 times for each newton-raphson step
-    #   Try brent's method. It's not as quickly convergent but it is written in C
     # noinspection PyTypeChecker
     yp_solved, details = optimize.brentq(
         equations.equation_13, -y, y,
