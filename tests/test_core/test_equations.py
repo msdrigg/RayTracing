@@ -1,17 +1,17 @@
 """
 Tests the equations making up our algorithm
 """
-from unittest import TestCase
-from tests.base import UtilityTestMixin
+from tests.base import UtilityTestMixin, get_directory_path
 from typing import *
 import json
 import os
 import numpy as np
+from core import equations
 
 
 class BaseEquationsTester(UtilityTestMixin):
     file_name = None
-    file_dir = os.getcwd()
+    file_dir = get_directory_path(__file__)
 
     @staticmethod
     def process_input(*inputs) -> Tuple:
@@ -21,117 +21,171 @@ class BaseEquationsTester(UtilityTestMixin):
     def process_output(*outputs) -> Tuple:
         return outputs
 
+    @staticmethod
+    def get_calculation(*inputs) -> Union[np.ndarray, float]:
+        return 0
+
+    def verify_failure(self, *inputs):
+        with self.assertWarns(RuntimeWarning):
+            self.get_calculation(inputs)
+
     def run_test_suite(self, inputs, expected_outputs):
         """
         We take a list of inputs 
         """
-        processed_outputs = self.process_output(expected_outputs)
+        for input_variables_preprocessed, expected_preprocessed in zip(inputs, expected_outputs):
+            inputs_processed = self.process_input(*input_variables_preprocessed)
+            expected_output = self.process_output(expected_preprocessed)
 
-        self.verify_vectorized_calculation_success(
-            *self.get_vector_success_inputs_outputs(vectors, processed_outputs)
+            if expected_output is not None:
+                print("Next iteration")
+                print(inputs_processed)
+                print(expected_output)
+                calculation = self.get_calculation(inputs_processed)
+                print(calculation)
+                np.testing.assert_allclose(
+                    calculation,
+                    expected_output
+                )
+                calculation = self.get_calculation([np.array(variable) for variable in inputs_processed])
+                np.testing.assert_allclose(
+                    calculation,
+                    np.ndarray(expected_output)
+                )
+            else:
+                self.verify_failure(inputs_processed)
+                self.verify_failure([np.array(variable) for variable in inputs_processed])
+
+        input_variables_vectorized = np.array(
+            [self.process_input(*inputs_outputs_combined[0]) for inputs_outputs_combined in
+             zip(inputs, expected_outputs) if inputs_outputs_combined[1] is not None]
+        ).T
+
+        expected_output_vectorized = np.array(
+            [self.process_output(expected_output) for expected_output in expected_outputs
+             if expected_output is not None]
+        ).T
+
+        np.testing.assert_allclose(
+            self.get_calculation(*input_variables_vectorized),
+            expected_output_vectorized
         )
 
-        failure_vecs = self.get_vector_failures(vectors, processed_outputs)
-        if len(failure_vecs) > 0 and failure_vecs[0].size > 0:
-            self.verify_failure(
-                failure_vecs
-            )
+        input_failure_vectorized = np.array(
+            [self.process_input(*inputs_outputs_combined[0]) for inputs_outputs_combined in
+             zip(inputs, expected_outputs) if inputs_outputs_combined[1] is None]
+        ).T
 
-        for inputs in self.get_single_failures(vectors, processed_outputs):
-            self.verify_failure([inputs[i].reshape(1, -1) for i in range(len(inputs))])
+        if input_failure_vectorized.size > 0:
+            self.verify_failure(*input_failure_vectorized)
 
-        for vec in self.get_single_failures(vectors, processed_outputs):
-            self.verify_single_calculation_success(vec, processed_outputs)
-
-        for inputs, outputs in self.get_single_success_inputs_outputs(vectors, processed_outputs):
-            new_inputs = list(inputs)
-            new_inputs[0] = inputs[0].reshape(1, -1)
-            self.verify_vectorized_calculation_success(
-                new_inputs,
-                outputs[np.newaxis]
-            )
-
-        for inputs, outputs in self.get_single_success_inputs_outputs(vectors, processed_outputs):
-            self.verify_single_calculation_success(inputs, outputs)
-
-    def get_single_success_inputs_outputs(self, vectors, expected) -> List[Tuple[Any, ...]]:
-        pass
-
-    def load_file(self):
+    def load_data(self):
         with open(os.path.join(self.file_dir, self.file_name)) as f:
             return json.load(f)
 
     @staticmethod
     def split_test_group(test_group):
-        inputs = [item["input"] for item in test_group]
-        outputs = [item["output"] for item in test_group]
+        inputs = [item[0] for item in test_group]
+        outputs = [item[1] for item in test_group]
         return inputs, outputs
 
     def test_target_equation(self):
-        if self.file_name is None:
-            return
+        if self.file_name is not None:
+            test_sets = self.load_data()
 
-        test_sets = self.load_file()
-
-        for group in test_sets:
-            inputs, expected = self.split_test_group(test_sets[group])
-            try:
-                self.run_test_suite(inputs, expected)
-            except Exception as e:
-                print(f"Error when running trial: {group}")
-                raise e
+            for group in test_sets:
+                inputs, expected = self.split_test_group(test_sets[group])
+                try:
+                    self.run_test_suite(inputs, expected)
+                except Exception as e:
+                    print(f"Error when running trial: {group}")
+                    raise e
 
 
-class TestEquation13(TestCase):
-    def test_standard(self):
-        self.fail()
+class TestEquation13(BaseEquationsTester):
+    file_name = r'calculations/calculate_eq_13_results.json'
 
-    def test_zero_field(self):
-        self.fail()
+    @staticmethod
+    def process_input(*inputs) -> Tuple:
+        x, y, yp, yt = inputs
+        return yp, x, y**2, yt
+
+    @staticmethod
+    def get_calculation(inputs) -> Union[np.ndarray, float]:
+        return equations.equation_13(*inputs)
+
+
+class TestEquation14(BaseEquationsTester):
+    file_name = r'calculations/calculate_eq_14_results.json'
+
+    @staticmethod
+    def process_input(*inputs) -> Tuple:
+        x, y, yp, yt = inputs
+        fractions = equations.equation_16(
+            yp, yp**2, x, y**2
+        )
+        return yp, yp**2, y**2, fractions, yt
     
-    def test_zero_atmosphere(self):
-        self.fail()
+    @staticmethod
+    def get_calculation(inputs) -> Union[np.ndarray, float]:
+        return equations.equation_14(*inputs)
 
 
-class TestEquation13Prime(TestCase):
-    def test_standard(self):
-        self.fail()
+class TestEquation15(BaseEquationsTester):
+    file_name = r'calculations/calculate_eq_15_results.json'
 
-    def test_zero_field(self):
-        self.fail()
+    @staticmethod
+    def process_input(*inputs) -> Tuple:
+        x, y, yp = inputs
+        return yp ** 2, x, y ** 2
+
+    @staticmethod
+    def get_calculation(inputs) -> Union[np.ndarray, float]:
+        return equations.equation_15(*inputs)
+
+
+class TestEquation16(BaseEquationsTester):
+    file_name = r'calculations/calculate_eq_16_results.json'
+
+    @staticmethod
+    def process_input(*inputs) -> Tuple:
+        x, y, yp = inputs
+        return yp, yp ** 2, x, y ** 2
+
+    @staticmethod
+    def get_calculation(inputs) -> Union[np.ndarray, float]:
+        return equations.equation_16(*inputs)
+
+
+class TestCalculateYP(BaseEquationsTester):
+    file_name = r'calculations/calculate_yp_results.json'
+
+    @staticmethod
+    def process_input(*inputs) -> Tuple:
+        x, y, yt = inputs
+        return x, y, y ** 2, yt
+
+    @staticmethod
+    def get_calculation(inputs) -> Union[np.ndarray, float]:
+        return equations.calculate_yp(*inputs)
+        
+
+# class TestCalculateA(TestCase):
+#     file_name = r'calculations/calculate_a_results.json'
     
-    def test_zero_atmosphere(self):
-        self.fail()
+#     def get_calculation(self, inputs) -> Union[np.ndarray, float]:
+#         return equations.calculate_a(*inputs)
 
 
-class TestEquation14(TestCase):
-    def test_standard(self):
-        self.fail()
-
-    def test_zero_field(self):
-        self.fail()
+# class TestCalculateB(TestCase):
+#     file_name = r'calculations/calculate_b_results.json'
     
-    def test_zero_atmosphere(self):
-        self.fail()
+#     def get_calculation(self, inputs) -> Union[np.ndarray, float]:
+#         return equations.calculate_b(*inputs)
 
 
-class TestEquation15(TestCase):
-    def test_standard(self):
-        self.fail()
-
-    def test_zero_field(self):
-        self.fail()
+# class TestCalculateC(TestCase):
+#     file_name = r'calculations/calculate_c_results.json'
     
-    def test_zero_atmosphere(self):
-        self.fail()
-
-
-class TestEquation16(TestCase):
-    def test_standard(self):
-        self.fail()
-
-    def test_zero_field(self):
-        self.fail()
-    
-    def test_zero_atmosphere(self):
-        self.fail()
+#     def get_calculation(self, inputs) -> Union[np.ndarray, float]:
+#         return equations.calculate_c(*inputs)

@@ -38,30 +38,6 @@ def load_dynamic_modules(atmosphere_module_name: str, magnetic_field_module_name
     magnetic = importlib.import_module('magnetic.' + magnetic_field_module_name)
 
 
-def solve_yp_pt(x: float, y: float, y_squared: float, yt: float):
-    """
-    TODO: TEST WITH RUST VERSION. IT IS VECTORIZED AND SHOULD SPEED UP GREATLY
-    Given the parameters, return the solution to yp
-    :return: yp solved
-    """
-    if abs(y) < constants.EPSILON:
-        return 0
-
-    function_args = x, y_squared, yt
-    # noinspection PyTypeChecker
-    yp_solved, details = optimize.brentq(
-        equations.equation_13, -y, y,
-        args=function_args, xtol=1E-15, rtol=1E-15, full_output=True
-    )
-    if not details.converged:
-        warnings.warn(
-            f"Error solving for yp using equation 13. Attempted {details.iterations} iterations "
-            f"and resulted in {details.root}, "
-            f"stopping with reason: {details.flag}."
-        )
-    return yp_solved
-
-
 def integrate_over_path(
         cartesian_coordinate_callable: Callable,
         operating_frequency: float,
@@ -99,14 +75,8 @@ def integrate_over_path(
     x = atmosphere.calculate_plasma_frequency(r, r_norm) / operating_frequency ** 2
     yt = vector.row_dot_product(y_vec, t)
 
-    yp = np.zeros(integration_step_number)
-
     # TODO: Optimize this
-    for n in range(integration_step_number):
-        if debug_zero_field:
-            yp[n] = 0
-        else:
-            yp[n] = solve_yp_pt(x[n], y[n], y_squared[n], yt[n])
+    yp = equations.calculate_yp(x, y, y_squared, yt)
 
     yp_squared = np.square(yp)
     fractions = equations.equation_16(yp, yp_squared, x, y_squared)

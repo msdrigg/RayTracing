@@ -4,6 +4,7 @@ General testing core
 import json
 import math
 from unittest import TestCase
+import os
 
 import numpy as np
 import numpy.testing as np_test
@@ -21,6 +22,10 @@ class UtilityTestMixin(TestCase):
             f"abs_tol={rel_tol}, rel_tol={rel_tol}\n"
             f"Number 1: {num1}, \nNumber 2: {num2}"
         )
+
+
+def get_directory_path(file_inserted):
+    return os.path.dirname(os.path.realpath(file_inserted))
 
 
 class BaseNumpyCalculationVerifier(UtilityTestMixin):
