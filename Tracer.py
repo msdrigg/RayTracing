@@ -7,10 +7,8 @@ from Field import BasicField
 from Paths import QuasiParabolic, GreatCircleDeviation
 from scipy.linalg import solve as sym_solve
 from scipy.integrate import simps
-# from scipy.optimize._minpack import _hybrj as hybrj
 import Vector
 from matplotlib import use as matplotlib_use
-matplotlib_use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 from Constants import PI, EARTH_RADIUS
@@ -22,6 +20,11 @@ from os.path import join as join_path
 
 
 DEFAULT_PARAMS = 50, 5
+EXTRAORDINARY = False
+sign = 1
+
+if EXTRAORDINARY:
+    sign = -1
 
 errors = {0: "Improper input parameters were entered.",
           1: "The solution converged.",
@@ -50,29 +53,6 @@ def equation_13_new(yp, *args):
 
     output = -1 + pt * (pt - yt * (1 - pt) * fractions * 0.5)
     return output
-
-
-# def equation_13_prime(yp, *args):
-#     x, y2, yt = args
-#     yp2 = square(yp)
-#     radical = sqrt(square(y2 - yp2) + 4*yp2*square(1 - x))
-#     a = 1 - x - y2 + x*yp2
-#
-#     # Choosing ordinary ray
-#     alpha = 2*(1-x)/((2 + yp2 + radical) - (2*x + y2))
-#     d_alpha = -4*(1-x)*yp*(-1 + (-(4*x + y2) +
-#                                  (yp2 + 2 + 2*square(x)))/radical)/square(-(2*x + y2) + (2 + yp2 + radical))
-#
-#     frac = 2*x*yp*alpha/(-(2 + yp2) + (y2 + 2*a*alpha + 2*x))
-#     d_frac = 2*x*yp*d_alpha*(-2 + 2*x + y2 - yp2)/square(-(2*x + y2 + 2*a*alpha) + (2 + yp2))
-#
-#     pt = yt/(yp - 0.5*frac*(y2 - yp2))
-#     d_pt = -2*yt*(2 + 2*yp*frac - (y2 - yp2)*d_frac)/square(2*yp - (y2 - yp2)*frac)
-#
-#     output = 0.5*(pt*(frac*pt + (-yt + yp*pt)*d_frac) + (-yt*frac + 2*(2 + yp*frac)*pt)*d_pt)
-#     # print("Outputting Derivatives")
-#     # print(output)
-#     return output
 
 
 def equation_13_prime_new(yp, *args):
@@ -105,7 +85,8 @@ def equation_14(yp, yp2, y2, fractions, yt):
 def equation_15(yp, x, y2):
     # We choose ordinary ray in our calculation of mu2
     yp2 = square(yp)
-    return 1 - 2 * x * (1 - x) / (2 * (1 - x) - (y2 - yp2) +
+
+    return 1 - 2 * x * (1 - x) / (2 * (1 - x) - (y2 - yp2) + sign *
                                   sqrt(square(y2 - yp2) + 4 * square(1 - x) * yp2))
 
 
@@ -136,11 +117,6 @@ def off_diagonal_dirs(inputs):
     path_pp = curr_path.adjust_parameters([index_pair[0], index_pair[1]], vary_h)
     p_pp = self.integrate_parameter(path_pp, h=int_h)
     output = (p_pp - p_pm - p_mp + p_mm) / (4 * vary_h ** 2)
-
-    # total = (index_pair[0] + 1) * (self.parameter_number - 1) - int((index_pair[0] + 1) * (index_pair[0]) / 2)
-    # if total % 500 == 0:
-    #     print(f"Completed integration {total*4} of "
-    #           f"{int(self.parameter_number*(self.parameter_number-1)/2) * 4} (asynchronous)")
 
     return array([index_pair[0], index_pair[1], output])
 
@@ -230,7 +206,7 @@ class Tracer:
                         ax.arrow(x_g, y_g, dx_g, dy_g, color='white', width=3,  head_width=12, head_length=12)
 
                 if save_plots:
-                    fig.savefig(join_path("SavedPlots", f'TotalChange_{i}.png'))
+                    fig.savefig(join_path("saved_plots", f'TotalChange_{i}.png'))
                     plt.close(fig)
                 else:
                     plt.show()
@@ -239,7 +215,7 @@ class Tracer:
                 plt.plot(gradient)
                 plt.suptitle("Gradient Graph")
                 if save_plots:
-                    plt.savefig(join_path("SavedPlots", f'Gradient_{i}.png'))
+                    plt.savefig(join_path("saved_plots", f'Gradient_{i}.png'))
                     plt.close()
                 else:
                     plt.show()
@@ -254,13 +230,13 @@ class Tracer:
                 plt.suptitle("Matrix graph")
 
                 if save_plots:
-                    fig.savefig(join_path("SavedPlots", f'Hessian Matrix_{i}.png'))
+                    fig.savefig(join_path("saved_plots", f'Hessian Matrix_{i}.png'))
                     plt.close(fig)
                 else:
                     plt.show()
                     plt.close(fig)
 
-            if norm(change_vec) < 500*sqrt(len(change_vec)):
+            if norm(change_vec) < 10 * sqrt(len(change_vec)):
                 # Break if the change vec goes too small (small means a change of less than 500 m per position)
                 print(f"Ending with final change vector of {norm(change_vec)}")
                 break
@@ -280,10 +256,10 @@ class Tracer:
         self.calculated_paths.append(next_path)
         return matrix, gradient, change
 
-    def calculate_derivatives(self, h=5000):
+    def calculate_derivatives(self, h=1):
         # We need to make sure our integration step size is significantly smaller than our derivative
         #   or else our truncation error will be too large
-        integration_step = 1/500.0
+        integration_step = 1/2000.0
 
         # dP/da_i
         gradient = zeros((self.parameter_number,))
@@ -405,7 +381,7 @@ class Tracer:
             fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
             ax.plot(dp_array)
             if save is not None:
-                fig.savefig(join_path("SavedPlots", f'TotalPValues_{save}.png'))
+                fig.savefig(join_path("saved_plots", f'TotalPValues_{save}.png'))
             else:
                 plt.show()
             plt.close(fig)
@@ -453,7 +429,8 @@ if __name__ == "__main__":
     final = Vector.spherical_to_cartesian(
         Vector.latitude_to_spherical(
             array([EARTH_RADIUS, 90 + 23.5 - 10, 133.7])))
-    atmosphere = ChapmanLayers(7E6, 350E3, 100E3, (0.375E6 * 180 / PI, -1), initial)
+    atmosphere = ChapmanLayers(7E6, 350E3, 100E3, (0.1E6 * 180 / PI, -1), initial)
+    # atmosphere = ChapmanLayers(7E6, 350E3, 100E3, None, initial)
     path_generator = QuasiParabolic
     frequency = 10E6  # Hz
     # atmosphere.visualize(initial, final, ax=None, fig=None, point_number=400, show=True)

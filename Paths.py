@@ -1,15 +1,14 @@
 from abc import ABC, abstractmethod
 from numpy.linalg import norm
-from numpy import cross, outer, zeros, repeat, cos, arccos, arctan2, \
-    linspace, concatenate, array, log, sqrt, square, asarray, amax
-from numpy import where as where_array
+from numpy import cross, outer, zeros, repeat, \
+    linspace, concatenate, array, asarray, amax
+
+import Initialize
 import Vector
 from scipy.interpolate import UnivariateSpline
 from scipy.spatial.transform import Rotation
-from scipy.optimize import fsolve
-from Constants import PI, EARTH_RADIUS, TYPE_ABBREVIATION
+from Constants import EARTH_RADIUS, TYPE_ABBREVIATION
 from matplotlib import pyplot as plt
-from os.path import join as join_path
 
 
 class Path(ABC):
@@ -87,7 +86,7 @@ class QuasiParabolic(Path):
             midpoint = Vector.unit_vector(midpoint) * (EARTH_RADIUS + atmosphere_model.parameters[1])
             f_1 = atmosphere_model.plasma_frequency(midpoint)
             f_0 = atmosphere_model.parameters[0]
-            gradient_effect = f_1 - f_0
+            gradient_effect = 0
         self._parameters = self.calculate_parameters(atmosphere_model, gradient_effect, wave_frequency)
         # Point number is the number of points to calculate. All points in between are interpolated from PC spline
         if point_number is not None:
@@ -146,80 +145,22 @@ class QuasiParabolic(Path):
 
     def compile_points(self):
         fc, rm, rb, ym, f = self._parameters
-        a = 1 - (fc/f)**2 + (fc*rb/(f*ym))**2
-        b = -2 * rm * (fc * rb / (f * ym)) ** 2
         total_angle = Vector.angle_between(self.initial_point, self.final_point)
 
-        def beta_solver(beta_0_g):
-            # According to equation 8 in the hill 1979 paper
-            beta_b_g = arccos(EARTH_RADIUS*cos(beta_0_g)/rb)
-            xb_g = rb**2 - (EARTH_RADIUS**2) * (cos(beta_0_g))**2
-            c_g = (fc * rb * rm / (f * ym)) ** 2 - \
-                  (EARTH_RADIUS ** 2) * (cos(beta_0_g)) ** 2
-            adder = EARTH_RADIUS*(beta_b_g - (total_angle/2 + beta_0_g))
-            multiplier = (EARTH_RADIUS**2) * (cos(beta_0_g)) / sqrt(c_g)
-            numerator = 2*c_g + b*rb + 2*sqrt(c_g*xb_g)
-            denominator = rb*sqrt(b**2 - 4*a*c_g)
-            output = adder + multiplier * log(numerator/denominator)
-            return output
-
-        # Guessing beta_0 assuming that the ray travels a straight line and meets between the
-        # final and initial point at the point of greatest atmospheric e-density
-        d_perp = norm(self.final_point*self.points[0, 1] - self.initial_point*self.points[-1, 1])
-        alpha_0 = arctan2(rm - EARTH_RADIUS, d_perp/2)
-        beta_0_initial_guess = (alpha_0 - total_angle/2)*2
-        beta_0_initial_guess = 0.458
-        while b**2 < 4*a*((fc * rb * rm / (f * ym)) ** 2 -
-                          (EARTH_RADIUS ** 2) * (cos(beta_0_initial_guess)) ** 2):
-            print(f"Reducing initial beta guess. New guess: {beta_0_initial_guess}")
-            if beta_0_initial_guess < .02:
-                raise OverflowError(f"Too many runs {beta_0_initial_guess}")
-            beta_0_initial_guess *= 2.0/3.0
-
-        beta_0, info_dict, ier, msg = fsolve(beta_solver, x0=beta_0_initial_guess, full_output=True)
-        print(f"Beta_0: {beta_0}")
-        if ier != 1:
-            print(f"Function Call Number: {info_dict['nfev']}")
-            print(f"Last solution before failure: {beta_0}")
-            raise RuntimeError(f"Error on beta_0 fsolve: {msg}")
-
-        c = (fc*rb*rm/(f*ym))**2 - (EARTH_RADIUS*cos(beta_0))**2
-        xb = rb**2 - (EARTH_RADIUS*cos(beta_0))**2
-        beta_b = arccos(EARTH_RADIUS*cos(beta_0)/rb)
-        apogee = (-(b + sqrt(b**2 - 4*a*c))/(2*a))[0]
-
-        # We want 2 params for the straight part and 2 additional parameter per degree of longitude
-        radius_params = zeros([int(total_angle * 180 / PI) * 8 + 1, 2])
-        radius_params[::len(radius_params) - 1, 1] = self.points[0, 1], self.points[-1, 1]
-        radius_params[-1, 0] = total_angle
-
-        increasing = linspace(EARTH_RADIUS, apogee, int((len(radius_params))/2) + 1)
-        print(increasing)
-        radius_params[:int(len(radius_params)/2) + 1, 1] = increasing
-        radius_params[int(len(radius_params)/2):, 1] = increasing[::-1]  # Flip it
-
-        def d_t(radius_vectorized):
-            below_output = EARTH_RADIUS*(arccos(EARTH_RADIUS*cos(beta_0)/radius_vectorized) - beta_0)
-            x = a*square(radius_vectorized) + b*radius_vectorized + c
-            multiplier = EARTH_RADIUS**2 * cos(beta_0)/sqrt(c)
-            numerator = radius_vectorized*(2*c + rb*b + 2*sqrt(c*xb))
-            denominator = rb*(2*c + radius_vectorized*b + 2*sqrt(c*x))
-            adder = EARTH_RADIUS*(beta_b - beta_0)
-            above_output = adder + multiplier*log(numerator/denominator)
-            output = where_array(radius_vectorized <= rb, below_output, above_output)
-            return output
-
-        radius_params[:int(len(radius_params)/2) + 1, 0] = \
-            d_t(radius_params[:int(len(radius_params)/2) + 1, 1]) / EARTH_RADIUS
-        radius_params[int(len(radius_params)/2) + 1:, 0] = \
-            total_angle - d_t(radius_params[int(len(radius_params)/2) + 1:, 1]) / EARTH_RADIUS
-
-        self.points = radius_params
+        points_unprocessed = Initialize.get_quasi_parabolic_path(
+            total_angle * EARTH_RADIUS, f, rm + EARTH_RADIUS, ym, fc**2
+        )[0]
+        points_unprocessed[:, 1] = points_unprocessed[:, 1]
+        points_unprocessed[:, 0] = points_unprocessed[:, 0] / EARTH_RADIUS
+        self.points = points_unprocessed
+        
         self._total_angle = total_angle
-        plt.plot(radius_params[:, 0], radius_params[:, 1], color='blue')
-        plt.plot(radius_params[:, 0], repeat(apogee, len(radius_params[:, 0])))
-        plt.savefig(join_path("SavedPlots", 'QP Plot.png'))
-        self._poly_fit = UnivariateSpline(radius_params[:, 0], radius_params[:, 1],
+        plt.plot(points_unprocessed[:, 0], points_unprocessed[:, 1], color='blue')
+        plt.suptitle("QP Plot")
+        plt.show()
+        plt.close()
+        # plt.savefig(join_path("saved_plots", 'QP Plot.png'))
+        self._poly_fit = UnivariateSpline(points_unprocessed[:, 0], points_unprocessed[:, 1],
                                           k=self.degree, s=0, ext=0)
 
     @property

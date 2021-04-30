@@ -126,5 +126,5 @@ dmypy.json
 
 # Pycharm settings
 .idea/
-SavedPlots/
+saved_plots/
 SavedData/
