@@ -1,7 +1,11 @@
 from abc import ABC, abstractmethod
+
+import numpy as np
+import typing
 from numpy.linalg import norm
 from numpy import cross, outer, zeros, repeat, \
     linspace, concatenate, array, asarray, amax
+from numpy.typing import ArrayLike
 
 import Initialize
 import Vector
@@ -62,8 +66,12 @@ class Path(ABC):
 class QuasiParabolic(Path):
     # Currently, must initialize with a cartesian vector
     # This class needs less optimization because its just a starting point.
-    def __init__(self, initial_coordinates, final_coordinates, atmosphere_model,
-                 wave_frequency, degree=4, point_number=None):
+    def __init__(
+            self, initial_coordinates,
+            final_coordinates, atmosphere_model,
+            wave_frequency, degree=4, point_number=None,
+            use_high_ray=True,
+    ):
         # Initial and final points are normalized, but poly_fit(0) and poly_fit(1) will return the radial component
         # for the initial and final point
         initial_rad, final_rad = norm(initial_coordinates), norm(final_coordinates)
@@ -78,16 +86,9 @@ class QuasiParabolic(Path):
 
         angle_between = Vector.angle_between(initial_coordinates, final_coordinates, use_spherical=False)
 
-        # Parameters for quasiparabolic path only depend on atmospheric model and ignore magnetic field
-        if atmosphere_model.gradient is None:
-            gradient_effect = 0
-        else:
-            midpoint = (self.initial_point + self.final_point) / 2
-            midpoint = Vector.unit_vector(midpoint) * (EARTH_RADIUS + atmosphere_model.parameters[1])
-            f_1 = atmosphere_model.plasma_frequency(midpoint)
-            f_0 = atmosphere_model.parameters[0]
-            gradient_effect = 0
-        self._parameters = self.calculate_parameters(atmosphere_model, gradient_effect, wave_frequency)
+        # Parameters for quasi-parabolic path only depend on atmospheric model and ignore magnetic field
+
+        self._parameters = self.calculate_parameters(atmosphere_model, wave_frequency)
         # Point number is the number of points to calculate. All points in between are interpolated from PC spline
         if point_number is not None:
             self.point_number = point_number
@@ -104,6 +105,7 @@ class QuasiParabolic(Path):
         # Real representation of the line will be a poly fit of radius vs angle along great circle
         self._poly_fit = None
         self._total_angle = None
+        self.using_high_ray = use_high_ray
         self.compile_points()
 
     @property
@@ -126,7 +128,7 @@ class QuasiParabolic(Path):
     def __call__(self, fraction, use_spherical=False, **kwargs):
         # Nu is not allowed as a parameter
         if "nu" in kwargs and kwargs.get("nu") != 0:
-            raise(NotImplementedError("Quasiparabolic class does not have derivative capabilities."))
+            raise(NotImplementedError("Quasi-parabolic class does not have derivative capabilities."))
         if self._poly_fit is None:
             self.compile_points()
         alpha = fraction*self.points[-1, 0]
@@ -149,19 +151,22 @@ class QuasiParabolic(Path):
 
         points_unprocessed = Initialize.get_quasi_parabolic_path(
             total_angle * EARTH_RADIUS, f, rm + EARTH_RADIUS, ym, fc**2
-        )[0]
+        )
+        if self.using_high_ray:
+            points_unprocessed = points_unprocessed[0]
+        else:
+            points_unprocessed = points_unprocessed[1]
+
         points_unprocessed[:, 1] = points_unprocessed[:, 1]
         points_unprocessed[:, 0] = points_unprocessed[:, 0] / EARTH_RADIUS
         self.points = points_unprocessed
         
         self._total_angle = total_angle
-        plt.plot(points_unprocessed[:, 0], points_unprocessed[:, 1], color='blue')
-        plt.suptitle("QP Plot")
-        plt.show()
-        plt.close()
-        # plt.savefig(join_path("saved_plots", 'QP Plot.png'))
-        self._poly_fit = UnivariateSpline(points_unprocessed[:, 0], points_unprocessed[:, 1],
-                                          k=self.degree, s=0, ext=0)
+
+        self._poly_fit = UnivariateSpline(
+            points_unprocessed[:, 0], points_unprocessed[:, 1],
+            k=self.degree, s=0, ext=0
+        )
 
     @property
     def poly_fit(self):
@@ -170,8 +175,8 @@ class QuasiParabolic(Path):
         return self._poly_fit
 
     @staticmethod
-    def calculate_parameters(atmosphere_model, gradient_effect, wave_frequency):
-        f_max = (atmosphere_model.parameters[0] + gradient_effect)
+    def calculate_parameters(atmosphere_model, wave_frequency):
+        f_max = (atmosphere_model.parameters[0])
         rm = atmosphere_model.parameters[1]
         ym = atmosphere_model.parameters[2]
         rb = rm - ym
@@ -181,7 +186,13 @@ class QuasiParabolic(Path):
 
 
 class GreatCircleDeviation(Path):
-    def __init__(self, radial_deviations, angular_deviations, using_spherical=True, **kwargs):
+    def __init__(
+            self,
+            radial_deviations: typing.Union[int, ArrayLike],
+            angular_deviations: typing.Union[int, ArrayLike],
+            using_spherical=True,
+            **kwargs
+    ):
         # Set the position of all parameters by concatenating the lists of radial deviations and angular deviations
         # Position is the angular location along the great circle connecting initial and final points
         if isinstance(radial_deviations, int) or isinstance(angular_deviations, int):
@@ -201,8 +212,8 @@ class GreatCircleDeviation(Path):
 
         # Each parameter is represented by a 2-vector: (position, value)
         # The extra 2 parameters are static parameters which correspond to fixing the start and end points
-        self._radial_positions = zeros((self.radial_param_number, 2))
-        self._angular_deviations = zeros((self.angular_param_number, 2))
+        self._radial_positions: np.ndarray = zeros((self.radial_param_number, 2))
+        self._angular_deviations: np.ndarray = zeros((self.angular_param_number, 2))
         self._radial_positions[:, 0] = radial_deviations
         self._angular_deviations[:, 0] = angular_deviations
 
@@ -292,8 +303,8 @@ class GreatCircleDeviation(Path):
             self.interpolate_params()
         if not mutate:
             new_path = GreatCircleDeviation(
-                len(self._radial_positions) - 2,
-                len(self._angular_deviations) - 2,
+                self._radial_positions.shape[0] - 2,
+                self._angular_deviations.shape[0] - 2,
                 initial_parameters=adjusted_params[:, 1],
                 initial_coordinate=self(0),
                 final_coordinate=self(1),
@@ -346,13 +357,21 @@ class GreatCircleDeviation(Path):
         return self._total_angle
 
     def interpolate_params(self, radial=False, degree=3):
-        self._poly_fit_angular = UnivariateSpline(self._angular_deviations[:, 0],
-                                                  self._angular_deviations[:, 1],
-                                                  k=min(degree, len(self._angular_deviations) - 1), s=0, ext=0)
+        self._poly_fit_angular = UnivariateSpline(
+            self._angular_deviations[:, 0],
+            self._angular_deviations[:, 1],
+            k=min(degree, len(self._angular_deviations) - 1),
+            s=0,
+            ext=0
+        )
         if radial:
-            self._poly_fit_radial = UnivariateSpline(self._radial_positions[:, 0],
-                                                     self._radial_positions[:, 1],
-                                                     k=degree, s=0, ext=0)
+            self._poly_fit_radial = UnivariateSpline(
+                self._radial_positions[:, 0],
+                self._radial_positions[:, 1],
+                k=degree,
+                s=0,
+                ext=0
+            )
         else:
             cartesian_points = zeros((len(self._radial_positions), 3))
             for index in range(len(self._radial_positions)):
@@ -367,5 +386,11 @@ class GreatCircleDeviation(Path):
                 cartesian_points[index] = v_2
             self._poly_fit_cartesian = []
             for index in range(3):
-                self._poly_fit_cartesian.append(UnivariateSpline(self._radial_positions[:, 0],
-                                                                 cartesian_points[:, index], k=degree, s=0))
+                self._poly_fit_cartesian.append(
+                    UnivariateSpline(
+                        self._radial_positions[:, 0],
+                        cartesian_points[:, index],
+                        k=degree,
+                        s=0
+                    )
+                )

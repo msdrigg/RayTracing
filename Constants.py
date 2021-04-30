@@ -8,3 +8,5 @@ EPSILON_0 = 8.854187817E-12  # F / m
 B_FACTOR = E_CHARGE / (2 * PI * E_MASS)  # Used to calculate gyro frequency
 TYPE_ABBREVIATION = {'QuasiParabolic': 'QP',
                      'GreatCircleDeviation': "GCD"}
+
+DEFAULT_PARAMS = 50, 5

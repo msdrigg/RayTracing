@@ -81,7 +81,7 @@ def test_qp_model():
     #     mutate=False
     # )
     # tracer.calculated_paths.append(new_path)
-    paths = tracer.trace(steps=30, h=100, visualize='save')
+    paths = tracer.trace(steps=30, h=100, debug_while_calculating='save')
     print(f"Snells final: {tracer.integrate_parameter(paths[-1])}")
     print(f"Analytic Result for QP Path: {tracer.integrate_parameter(paths[0])}")
     fig, ax = plt.subplots(1, 1, figsize=(6, 5.5))
