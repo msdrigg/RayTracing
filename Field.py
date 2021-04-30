@@ -33,7 +33,7 @@ class Field(ABC):
         return B_FACTOR * self.field_mag(position)
 
 
-class BasicField(Field):
+class DipoleField(Field):
     def __init__(self):
         self.b_max = B_FIELD
         self.re3 = power(EARTH_RADIUS, 3)  # E_Radius^3

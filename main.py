@@ -1,16 +1,16 @@
 import math
 import numpy as np
 
+import Field
 import Vector
 from Atmosphere import ChapmanLayers
 from Constants import EARTH_RADIUS
-from Field import BasicField
 from Paths import QuasiParabolic
 from Tracer import Tracer
 
 
 if __name__ == "__main__":
-    field = BasicField()
+    field = Field.ZeroField()
     path_start_point = Vector.spherical_to_cartesian(
         Vector.latitude_to_spherical(
             np.array([EARTH_RADIUS, 90 + 23.5, 133.7])))

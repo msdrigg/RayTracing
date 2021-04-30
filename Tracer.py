@@ -10,9 +10,10 @@ from scipy import linalg
 
 import Constants
 import Paths
+import Vector
 from Atmosphere import Atmosphere
 from Constants import EARTH_RADIUS
-from Equations import equation_15
+from Equations import equation_15, calculate_yp_pt_cheating, calculate_yp_pt_real
 from Field import Field
 from Paths import GreatCircleDeviation, Path
 
@@ -23,19 +24,29 @@ def integrate_parameter(system_state: SystemState, path: Path, h=0.00001, show=F
     step_number = int(1 / h)
     r = path(np.linspace(0, 1, step_number), nu=0)
     r_dot = path(np.linspace(0, 1, step_number), nu=1)
-    y_squared = np.square(system_state.field.gyro_frequency(r) / system_state.operating_frequency)
-    x = np.square(system_state.atmosphere.plasma_frequency(r) / system_state.operating_frequency)
+    r_dot_norm = linalg.norm(r_dot, axis=1)
+    t = r_dot / r_dot_norm.reshape(-1, 1)
 
-    # TODO: Implement working yp/pt solver
-    solved_yp = np.zeros(step_number)
-    current_pt = np.repeat(1, step_number)
+    y = system_state.field.gyro_frequency(r) / system_state.operating_frequency
+    y_vec = system_state.field.field_vec(r) * y.reshape(-1, 1)
+
+    y_squared = np.square(y)
+    x = np.square(system_state.atmosphere.plasma_frequency(r) / system_state.operating_frequency)
+    yt = Vector.row_dot_product(y_vec, t)
+
     sign = -1
     if system_state.is_extraordinary_ray:
         sign = 1
 
+    # TODO: Fix real yp/pt solver
+    solved_yp, solved_pt = calculate_yp_pt_cheating(r)
+    # solved_yp, solved_pt = calculate_yp_pt_real(
+    #     x, y, y_squared, yt, sign=sign
+    # )
+
     current_mu2 = equation_15(solved_yp, x, y_squared, sign=sign)
 
-    dp_array = np.sqrt(current_mu2) * current_pt * linalg.norm(r_dot, axis=1)
+    dp_array = np.sqrt(current_mu2) * solved_pt * linalg.norm(r_dot, axis=1)
     integration = simps(dp_array, dx=h)
     if show:
         fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
@@ -208,7 +219,7 @@ class Tracer:
                 # Break if the change vec goes too small (small means a change of less than 10 m per position)
                 print(
                     f"Ending calculations after {i + 1} steps because change magnitude converged sufficiently \n"
-                    f"Current change magnitude is {linalg.norm(change_vec)} \n"
+                    f"Current change magnitude is {linalg.norm(change_vec)} "
                     f"which is less than {10 * np.sqrt(len(change_vec))}"
                 )
                 break
@@ -227,7 +238,11 @@ class Tracer:
                 )
                 break
 
-        print("Done tracing path")
+            if i == steps - 1:
+                print(
+                    "Ending calculations because max step limit reached. "
+                    "If convergence isn't complete, rerun with more steps"
+                )
         return self.calculated_paths
 
     def newton_raphson_step(self, h=1, is_extraordinary_ray=False):
@@ -275,9 +290,7 @@ class Tracer:
                     counter += 1
             raise IndexError("You are indexing for a pair that doesn't exist")
 
-        total_ints = 3 * parameter_number
-        print("Calculating Derivatives for the diagonal elements")
-        print(f"Expecting {total_ints} diagonal integrations")
+        total_diagonal_ints = 3 * parameter_number
 
         # Parallelize calculation of directional diagonal derivatives
         diagonal_d_results = self.pool.map_async(
@@ -291,33 +304,33 @@ class Tracer:
             )
         )
 
-        elements = int(parameter_number * (parameter_number - 1) / 2)
-        print("Calculating Derivatives for the off diagonal elements")
-        print(f"Expecting {elements * 4} integrations")
+        off_diagonal_elements = int(parameter_number * (parameter_number - 1) / 2)
 
         # Parallelize calculation of directional off-diagonal derivatives
         off_diagonal_d_results = self.pool.map_async(
             off_diagonal_dirs,
             zip(
-                [self.get_system_state(is_extraordinary_ray) for _ in range(elements)],
-                [pair_generator(n, parameter_number) for n in range(elements)],
-                [self.calculated_paths[-1] for _ in range(elements)],
-                [integration_step for _ in range(elements)],
-                [h for _ in range(elements)]
+                [self.get_system_state(is_extraordinary_ray) for _ in range(off_diagonal_elements)],
+                [pair_generator(n, parameter_number) for n in range(off_diagonal_elements)],
+                [self.calculated_paths[-1] for _ in range(off_diagonal_elements)],
+                [integration_step for _ in range(off_diagonal_elements)],
+                [h for _ in range(off_diagonal_elements)]
             )
         )
 
+        # noinspection PyProtectedMember
+        print(
+            f"Calculating {total_diagonal_ints + off_diagonal_elements * 4} integrations "
+            f"with {self.pool._processes} processes ")
         for result in diagonal_d_results.get():
             index = int(result[0])
             gradient[index] = result[1]
             matrix[index, index] = result[2]
-        print("Completed Diagonal Integrations")
 
         for result in off_diagonal_d_results.get():
             row_idx, col_idx = int(result[0]), int(result[1])
             matrix[row_idx, col_idx] = result[2]
             matrix[col_idx, row_idx] = result[2]
-        print("Completed off diagonal integrations")
 
         return matrix, gradient
 
