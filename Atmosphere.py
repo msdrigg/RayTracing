@@ -47,12 +47,12 @@ class Atmosphere(ABC):
 
     @abstractmethod
     def plasma_frequency(self, coordinate, using_spherical=False):
-        pass
+        raise NotImplementedError("Inheriting classes must override the plasma_frequency method")
 
     @property
     @abstractmethod
     def parameters(self):
-        pass
+        raise NotImplementedError("Inheriting classes must override the parameters property")
 
 
 class ChapmanLayers(Atmosphere):

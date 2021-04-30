@@ -79,9 +79,9 @@ def equation_16(yp, yp2, x, y2, sign=1):
     return x * yp * beta / (1 + 0.5 * (yp2 - y2) - a * beta - x)
 
 
-def calculate_yp_pt_cheating(r: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    solved_yp = np.zeros(r.shape[0])
-    current_pt = np.repeat(1, r.shape[0])
+def calculate_yp_pt_cheating(yt: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    solved_yp = np.copy(yt)
+    current_pt = np.ones_like(yt)
     return solved_yp, current_pt
 
 

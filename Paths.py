@@ -52,15 +52,15 @@ class Path(ABC):
     @property
     @abstractmethod
     def parameters(self):
-        pass
+        raise NotImplementedError("Inheriting classes must override the parameters property")
 
     @abstractmethod
     def __call__(self, fraction, nu=0, use_spherical=False):
-        pass
+        raise NotImplementedError("Inheriting classes must override the __call__ method")
 
     @property
     def total_angle(self):
-        return None
+        raise NotImplementedError("Inheriting classes must override the total_angle property")
 
 
 class QuasiParabolic(Path):
@@ -68,7 +68,7 @@ class QuasiParabolic(Path):
     # This class needs less optimization because its just a starting point.
     def __init__(
             self, initial_coordinates,
-            final_coordinates, atmosphere_model,
+            final_coordinates, atmosphere_params,
             wave_frequency, degree=4, point_number=None,
             use_high_ray=True,
     ):
@@ -88,7 +88,7 @@ class QuasiParabolic(Path):
 
         # Parameters for quasi-parabolic path only depend on atmospheric model and ignore magnetic field
 
-        self._parameters = self.calculate_parameters(atmosphere_model, wave_frequency)
+        self._parameters = self.calculate_parameters(atmosphere_params, wave_frequency)
         # Point number is the number of points to calculate. All points in between are interpolated from PC spline
         if point_number is not None:
             self.point_number = point_number
@@ -175,13 +175,11 @@ class QuasiParabolic(Path):
         return self._poly_fit
 
     @staticmethod
-    def calculate_parameters(atmosphere_model, wave_frequency):
-        f_max = (atmosphere_model.parameters[0])
-        rm = atmosphere_model.parameters[1]
-        ym = atmosphere_model.parameters[2]
+    def calculate_parameters(atmosphere_params, wave_frequency):
+        f_max = atmosphere_params[0]
+        rm = atmosphere_params[1]
+        ym = atmosphere_params[2]
         rb = rm - ym
-        if atmosphere_model.plasma_frequency(array([rb, 0, 0]), using_spherical=True) < 0:
-            raise(RuntimeError("RB allows for negative atmosphere."))
         return array([f_max, rm, rb, ym, wave_frequency])
 
 

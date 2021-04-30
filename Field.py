@@ -14,14 +14,14 @@ class Field(ABC):
         :param using_spherical - Boolean deciding the system of the position vector and return vector
         :returns The normalized magnetic field in the same coordinate system as the position vector
         """
-        pass
+        raise NotImplementedError("Inheriting classes must override the field_vec function")
 
     @abstractmethod
     def field_mag(self, position, using_spherical=False):
         """
         This function returns the magnitude of the magnetic field given the parameters described above
         """
-        pass
+        raise NotImplementedError("Inheriting classes must override the field_mag function")
 
     def gyro_frequency(self, position, using_spherical=False):
         """
