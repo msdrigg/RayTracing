@@ -1,7 +1,9 @@
+import os
 import time
 
 import math
 import numpy as np
+from matplotlib.lines import Line2D
 
 import Field
 import Vector
@@ -10,6 +12,9 @@ from Constants import EARTH_RADIUS
 from Paths import QuasiParabolic
 from Tracer import Tracer
 
+from matplotlib import pyplot as plt
+import matplotlib as mpl
+mpl.rcParams['figure.dpi'] = 500
 
 if __name__ == "__main__":
     field = Field.DipoleField()
@@ -55,6 +60,13 @@ if __name__ == "__main__":
     basic_tracer.trace(h=10, high_ray=False)
     basic_tracer.visualize(show_history=True)
     basic_tracer.trace(h=10, high_ray=False, is_extraordinary_ray=True)
-    basic_tracer.visualize(show_history=True)
+    fig, ax = basic_tracer.visualize(fig=fig, ax=ax, show=False, color='white')
+
+    custom_lines = [Line2D([0], [0], color='black', lw=4),
+                    Line2D([0], [0], color='white', lw=4)]
+    ax.legend(custom_lines, ['Ordinary Ray', 'Extraordinary Ray'])
+    ax.set_title(f"Various Ray Traces with a {int(operating_frequency / 1E6)} MHz frequency")
+    fig.savefig(os.path.join('saved_plots', 'test_path_all_grad'))
+    plt.close(fig)
 
     basic_tracer.cleanup()  # Should call after we are done with tracer

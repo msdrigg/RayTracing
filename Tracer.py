@@ -371,19 +371,21 @@ class Tracer:
 
         return matrix, gradient
 
-    def visualize(self, show_history=False, show=True, fig=None, ax=None):
+    def visualize(self, show_history=False, show=True, fig=None, ax=None, color='black'):
         if fig is None or ax is None:
             fig, ax = plt.subplots(figsize=(6, 4.5), num=0)
-        ax.set_title(f"3D Ray Trace with a {int(self.frequency / 1E6)} MHz frequency")
-        self.atmosphere.visualize(self.initial_coordinates, self.final_coordinates, fig=fig, ax=ax, point_number=200)
-        ax.autoscale(False)
-        if show_history and len(self.calculated_paths) > 1:
-            custom_lines = [Line2D([0], [0], color='black', lw=4),
-                            Line2D([0], [0], color='white', lw=4)]
-            ax.legend(custom_lines, ['Best Trace', 'Earlier Traces'])
-        else:
-            custom_lines = [Line2D([0], [0], color='black', lw=4)]
-            ax.legend(custom_lines, ['Best Trace'])
+            ax.set_title(f"3D Ray Trace with a {int(self.frequency / 1E6)} MHz frequency")
+            self.atmosphere.visualize(self.initial_coordinates, self.final_coordinates, fig=fig, ax=ax, point_number=200)
+            ax.autoscale(False)
+            ax.set_ylabel("Altitude (km)")
+            ax.set_xlabel("Range (km)")
+            if show_history and len(self.calculated_paths) > 1:
+                custom_lines = [Line2D([0], [0], color='black', lw=4),
+                                Line2D([0], [0], color='white', lw=4)]
+                ax.legend(custom_lines, ['Best Trace', 'Earlier Traces'])
+            else:
+                custom_lines = [Line2D([0], [0], color='black', lw=4)]
+                ax.legend(custom_lines, ['Best Trace'])
         if show_history:
             for i in range(len(self.calculated_paths) - 1):
                 path = self.calculated_paths[i]
@@ -397,9 +399,7 @@ class Tracer:
         radii = path.radial_points[:, 1]
         radii = (radii - EARTH_RADIUS) / 1000
         km_range = path.radial_points[:, 0] * path.total_angle * EARTH_RADIUS / 1000
-        ax.plot(km_range, radii, color='black')
-        ax.set_ylabel("Altitude (km)")
-        ax.set_xlabel("Range (km)")
+        ax.plot(km_range, radii, color=color)
         if show:
             plt.show()
             plt.close(fig)
