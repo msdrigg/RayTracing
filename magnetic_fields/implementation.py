@@ -1,38 +1,7 @@
-from abc import abstractmethod, ABC
 
 from Vector import cartesian_to_spherical, unit_radius, unit_theta, unit_vector, spherical_to_cartesian
 from Constants import B_FIELD, EARTH_RADIUS, B_FACTOR
 from numpy import power, cos, sin, sqrt, square, array, asarray, repeat
-
-
-class Field(ABC):
-    @abstractmethod
-    def field_vec(self, position, using_spherical=False):
-        """
-        This function returns a normalized magnetic field vector using the given position vector
-        :param position - 3-vec that describes the position in either a cartesian or spherical coordinate system
-        :param using_spherical - Boolean deciding the system of the position vector and return vector
-        :returns The normalized magnetic field in the same coordinate system as the position vector
-        """
-        raise NotImplementedError("Inheriting classes must override the field_vec function")
-
-    @abstractmethod
-    def field_mag(self, position, using_spherical=False):
-        """
-        This function returns the magnitude of the magnetic field given the parameters described above
-        """
-        raise NotImplementedError("Inheriting classes must override the field_mag function")
-
-    def gyro_frequency(self, position, using_spherical=False):
-        """
-        This function returns the gyro frequency at the given point using the class's defined functions for
-        b_factor and field_mag
-        """
-        if using_spherical:
-            position = spherical_to_cartesian(position)
-        return B_FACTOR * self.field_mag(position)
-
-
 class DipoleField(Field):
     def __init__(self):
         self.b_max = B_FIELD

@@ -23,9 +23,7 @@ def test_integration():
     path = Path.QuasiParabolic(initial, final, qp, frequency)
     atmosphere = Atmosphere.ChapmanLayers(7E6, 350E3, 100E3, (0.375E6 * 180 / Const.PI, -1), initial)
     test_fig, ax1 = plt.subplots(figsize=(6, 4.5))
-    plot_range_mag = 0, max(atmosphere.parameters[0], qp.parameters[0]) / 1E6
-    atmosphere.visualize(initial, final, ax=ax1, fig=test_fig, point_number=400, show=False,
-                         plot_range=plot_range_mag)
+    atmosphere.visualize(initial, final, ax=ax1, fig=test_fig, point_number=400, show=False)
     path.visualize(fig=test_fig, ax=ax1, color="black")
 
     tracer = Trace.Tracer(frequency, qp, Field.ZeroField(), Path.QuasiParabolic)
@@ -59,13 +57,7 @@ def test_qp_model():
     final = Vec.spherical_to_cartesian(
         Vec.latitude_to_spherical(
             array([EARTH_RADIUS, 90 + 23.5 - 16, 133.7])))
-    # path = Path.QuasiParabolic(initial, final, qp, frequency)
-    # atmosphere = atm.ChapmanLayers(7E6, 350E3, 100E3, (0.375E6 * 180 / Const.PI, -1), initial)
-    # test_fig, ax1 = plt.subplots(figsize=(6, 4.5))
-    # plot_range_mag = 0, max(atmosphere.parameters[0], qp.parameters[0]) / 1E6
-    # atmosphere.visualize(initial, final, ax=ax1, fig=test_fig, point_number=400, show=False,
-    #                      plot_range=plot_range_mag)
-    # path.visualize(fig=test_fig, ax=ax1, color="black")
+            
     tracer_parameters = 100, 0
     tracer = Trace.Tracer(frequency, qp, Field.ZeroField(), Path.QuasiParabolic)
     tracer.parameters = tracer_parameters
