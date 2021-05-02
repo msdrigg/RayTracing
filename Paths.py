@@ -32,7 +32,7 @@ class Path(ABC):
         class_type = self.__class__.__name__
         _label = f'{TYPE_ABBREVIATION[class_type]} - {_frequency} MHz'
         angular_distance = linspace(0, 1, 100)
-        radii = self(angular_distance, use_spherical=True)[:, 0]
+        radii = np.linalg.norm(self(angular_distance), axis=-1)
         radii = (radii - EARTH_RADIUS) / 1000
         km_range = angular_distance * self.total_angle * EARTH_RADIUS / 1000
         max_x = km_range[-1]
@@ -55,7 +55,7 @@ class Path(ABC):
         raise NotImplementedError("Inheriting classes must override the parameters property")
 
     @abstractmethod
-    def __call__(self, fraction, nu=0, use_spherical=False):
+    def __call__(self, fraction, nu=0):
         raise NotImplementedError("Inheriting classes must override the __call__ method")
 
     @property
@@ -84,7 +84,7 @@ class QuasiParabolic(Path):
         self.normal_vec = cross(self.initial_point, self.final_point)
         self.normal_vec = self.normal_vec/norm(self.normal_vec)
 
-        angle_between = Vector.angle_between(initial_coordinates, final_coordinates, use_spherical=False)
+        angle_between = Vector.angle_between(initial_coordinates, final_coordinates)
 
         # Parameters for quasi-parabolic path only depend on atmospheric model and ignore magnetic field
 
@@ -125,7 +125,7 @@ class QuasiParabolic(Path):
         self._parameters = new_parameters
         self.compile_points()
 
-    def __call__(self, fraction, use_spherical=False, **kwargs):
+    def __call__(self, fraction, **kwargs):
         # Nu is not allowed as a parameter
         if "nu" in kwargs and kwargs.get("nu") != 0:
             raise(NotImplementedError("Quasi-parabolic class does not have derivative capabilities."))
@@ -135,11 +135,7 @@ class QuasiParabolic(Path):
 
         rotations = Rotation.from_rotvec(outer(alpha, self.normal_vec))
         rotated_vecs = rotations.apply(self.initial_point)
-        if use_spherical:
-            output_vecs = Vector.cartesian_to_spherical(rotated_vecs)
-            output_vecs[:, 0] = self._poly_fit(alpha)
-        else:
-            output_vecs = rotated_vecs*self._poly_fit(alpha).reshape(-1, 1)
+        output_vecs = rotated_vecs*self._poly_fit(alpha).reshape(-1, 1)
         if len(output_vecs) == 1:
             return output_vecs[0]
         else:
@@ -184,11 +180,109 @@ class QuasiParabolic(Path):
 
 
 class GreatCircleDeviation(Path):
+    class State:
+        def __init__(
+                self,
+                radial_parameters, angular_parameters,
+                start_point, end_point
+        ):
+            self.start_point = start_point
+            self.end_point = end_point
+            self.radial_parameters = radial_parameters
+            self.angular_parameters = angular_parameters
+
     def __init__(
             self,
             radial_deviations: typing.Union[int, ArrayLike],
             angular_deviations: typing.Union[int, ArrayLike],
-            using_spherical=True,
+            initializer_path: Path = None,
+            initializer_state: State = None
+    ):
+        # Set the position of all parameters by concatenating the lists of radial deviations and angular deviations
+        # Position is the angular location along the great circle connecting initial and final points
+        new_radii = zeros((len(radial_deviations) + 2))
+        new_thetas = zeros((len(angular_deviations) + 2))
+        new_radii[1:-1] = radial_deviations
+        new_thetas[1:-1] = angular_deviations
+        new_radii[-1] = 1
+        new_thetas[-1] = 1
+        radial_deviations = new_radii
+        angular_deviations = new_thetas
+
+        self.radial_param_number, self.angular_param_number = len(radial_deviations), len(angular_deviations)
+
+        # Each parameter is represented by a 2-vector: (position, value)
+        # The extra 2 parameters are static parameters which correspond to fixing the start and end points
+        self._radial_positions: np.ndarray = zeros((self.radial_param_number, 2))
+        self._angular_deviations: np.ndarray = zeros((self.angular_param_number, 2))
+        self._radial_positions[:, 0] = radial_deviations
+        self._angular_deviations[:, 0] = angular_deviations
+
+        if initializer_state is not None:
+            # Default to using initializer state
+
+            # Validate that the parameters used are valid for this input state
+            if self.radial_param_number == len(initializer_state.radial_parameters) or \
+                    self.angular_param_number != len(initializer_state.angular_parameters):
+                raise ValueError(
+                    "Invalid state used to create path. initializer_state path parameters "
+                    f"are of lengths {len(initializer_state.radial_parameters)}, and "
+                    f"{len(initializer_state.angular_parameters)}, while parameters supplied in constructor were of "
+                    f"lengths {self.radial_param_number} and {self.angular_param_number}. These values should match"
+                )
+
+            # First get the initial and final points from the initializer state
+            self.initial_point = initializer_state.start_point
+            self.final_point = initializer_state.end_point
+
+            # Initial and final radial positions are given by the initial and final point (usually ground-level)
+            # And initial and final radial deviations are 0
+            self._radial_positions[0, 1] = norm(self.initial_point)
+            self._radial_positions[-1, 1] = norm(self.final_point)
+
+            # All middle radial parameters are given by initializer state
+            self._radial_positions[1:-1, 1] = initializer_state.radial_parameters
+            self._angular_deviations[1:-1, 1] = initializer_state.angular_parameters
+
+        elif initializer_path is not None:
+            # Fallback to using path
+
+            # Take initial and final points from the path
+            self.initial_point = initializer_path(0)
+            self.final_point = initializer_path(1)
+
+            # Take radial parameters from the norm of the positions along the path
+            self._radial_positions[:, 1] = norm(
+                initializer_path(radial_deviations),
+                axis=-1
+            )
+
+            # Make sure to get the initial and final radial deviations on there
+            self._radial_positions[0, 1] = norm(initializer_path(0))
+            self._radial_positions[-1, 1] = norm(initializer_path(1))
+
+        else:
+            raise ValueError(
+                "New GCD paths need to be initialized with a non-null "
+                "initializer_state or initializer_path parameter"
+            )
+
+        # Get vector normal to path
+        self.normal_vec = Vector.unit_vector(
+            cross(self.initial_point, self.final_point)
+        )
+
+        # Declare other private variables
+        self._total_angle = None
+
+        self._poly_fit_angular = None
+        self._poly_fit_radial = None
+        self._poly_fit_cartesian = None
+
+    def __old_init__(
+            self,
+            radial_deviations: typing.Union[int, ArrayLike],
+            angular_deviations: typing.Union[int, ArrayLike],
             **kwargs
     ):
         # Set the position of all parameters by concatenating the lists of radial deviations and angular deviations
@@ -219,10 +313,6 @@ class GreatCircleDeviation(Path):
         self.initial_point, self.final_point = None, None
         if 'initial_coordinate' in kwargs and 'final_coordinate' in kwargs:
             self.initial_point, self.final_point = kwargs['initial_coordinate'], kwargs['final_coordinate']
-
-        if using_spherical and self.initial_point is not None and self.final_point is not None:
-            self.initial_point, self.final_point = Vector.spherical_to_cartesian(self.initial_point), \
-                                                   Vector.spherical_to_cartesian(self.final_point)
 
         # We provide 3 ways to initialize the parameters
         # Initialize with full parameters in one array
@@ -300,13 +390,20 @@ class GreatCircleDeviation(Path):
         if self._poly_fit_cartesian is None:
             self.interpolate_params()
         if not mutate:
+            self._radial_positions[0, 1] = norm(self.initial_point)
+            self._radial_positions[1:-1, 1] = adjusted_params[:self.radial_param_number - 2, 1]
+            self._angular_deviations[1:-1, 1] = adjusted_params[self.radial_param_number - 2:, 1]
+            self._radial_positions[-1, 1] = norm(self.final_point)
             new_path = GreatCircleDeviation(
                 self._radial_positions.shape[0] - 2,
                 self._angular_deviations.shape[0] - 2,
+                initializer_state=GreatCircleDeviation.State(
+                    start_point=self(0), end_point=self(0),
+                    radial_parameters=
+                )
                 initial_parameters=adjusted_params[:, 1],
                 initial_coordinate=self(0),
-                final_coordinate=self(1),
-                using_spherical=False
+                final_coordinate=self(1)
             )
 
             new_path.interpolate_params()
@@ -317,18 +414,14 @@ class GreatCircleDeviation(Path):
 
             self.interpolate_params()
 
-    def __call__(self, fraction, nu=0, use_spherical=False):
+    def __call__(self, fraction, nu=0):
         _ = self.poly_fit_cartesian
         point = array(list(map(lambda poly_fit: poly_fit(fraction, nu=nu), self._poly_fit_cartesian))).T
 
-        if use_spherical:
-            output_vecs = Vector.cartesian_to_spherical(point)
+        if np.isscalar(fraction):
+            return point.flatten()
         else:
-            output_vecs = point
-        if len(output_vecs) == 1:
-            return output_vecs[1]
-        else:
-            return output_vecs
+            return point
 
     @property
     def poly_fit_angular(self):

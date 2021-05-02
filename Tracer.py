@@ -285,7 +285,7 @@ class Tracer:
         next_path = GreatCircleDeviation(
             *self.parameters, initial_parameters=next_params,
             initial_coordinate=self.initial_coordinates,
-            final_coordinate=self.final_coordinates, using_spherical=False
+            final_coordinate=self.final_coordinates
         )
         self.calculated_paths.append(next_path)
         return matrix, gradient, change

@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+
+import Vector
 from Vector import spherical_to_cartesian, cartesian_to_spherical, angle_between, unit_vector
 from Constants import EARTH_RADIUS
 from numpy import array, exp, linspace, zeros, cross, sign, repeat, square, maximum, sqrt
@@ -24,7 +26,9 @@ class Atmosphere(ABC):
         for i in range(point_number):
             plotted_vecs = repeat(v_1[i].reshape(-1, 1), point_number, axis=1).T
             plotted_vecs[:, 0] = radii
-            frequency_grid[:, i] = self.plasma_frequency(plotted_vecs, using_spherical=True)/1E6
+            frequency_grid[:, i] = self.plasma_frequency(
+                Vector.spherical_to_cartesian(plotted_vecs)
+            )/1E6
         if plot_range is None:
             v_min = None
             v_max = None

@@ -33,7 +33,7 @@ if __name__ == "__main__":
         atmosphere_critical_frequency,
         atmosphere_altitude_of_max,
         atmosphere_semi_width,
-        atmosphere_gradient,
+        None,
         path_start_point
     )
     # atmosphere = ChapmanLayers(7E6, 350E3, 100E3, None, initial)
@@ -60,7 +60,8 @@ if __name__ == "__main__":
                     Line2D([0], [0], color='white', lw=4)]
     ax.legend(custom_lines, ['Ordinary Ray', 'Extraordinary Ray'])
     ax.set_title(f"Various Ray Traces with a {int(operating_frequency / 1E6)} MHz frequency")
-    fig.savefig(os.path.join('saved_plots', 'test_path_all_grad'))
+    fig.show()
+    # fig.savefig(os.path.join('saved_plots', 'test_path_all_grad'))
     plt.close(fig)
 
     basic_tracer.cleanup()  # Should call after we are done with tracer
