@@ -1,5 +1,7 @@
 # RayTracing
 
+[![CC BY 4.0][cc-by-shield]][cc-by]
+
 ## Introduction
 
 Python implementation of a direct variational ray tracing method. 
@@ -88,3 +90,9 @@ This object must subclass the `BasePath` class.
 ## Conclusion
 Please review the [supporting paper](Report.pdf), 
 and read the comments provided within the code. Good luck tracing!
+
+## Citing this Work
+This work is licensed under a [Creative Commons Attribution 4.0 International License][cc-by]. Please use [this doi link](https://doi.org/10.5281/zenodo.4734289) to cite this software.
+
+[cc-by]: http://creativecommons.org/licenses/by/4.0/
+[cc-by-shield]: https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg
