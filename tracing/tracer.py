@@ -3,126 +3,48 @@ import warnings
 from os.path import join as join_path
 from typing import Optional
 
+import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
-import numpy as np
-from scipy.integrate import simps
 from scipy import linalg
+from scipy.integrate import simps
 
-import Constants
-import Paths
-import Vector
-from Atmosphere import Atmosphere
-from Constants import EARTH_RADIUS
-from Equations import equation_15, calculate_yp_pt_cheating, calculate_yp_pt_real
-from Field import Field
-from Paths import GreatCircleDeviation, Path
-
-from SystemState import SystemState
+from atmospheres import BaseAtmosphere
+from magnetic_fields import BaseField
+from paths import BasePath
+from tracing.coleman_equations import equation_15, calculate_yp_pt_cheating, calculate_yp_pt_real
+from utilities import Vector
+from utilities.Constants import EARTH_RADIUS
 
 
-def integrate_parameter(
-        system_state: SystemState,
-        path: Path, h=0.00001,
-        show=False, save=False,
-        use_cheater_solver=True
-):
-    step_number = int(1 / h)
-    r = path(np.linspace(0, 1, step_number), nu=0)
-    r_dot = path(np.linspace(0, 1, step_number), nu=1)
-    r_dot_norm = linalg.norm(r_dot, axis=1)
-    t = r_dot / r_dot_norm.reshape(-1, 1)
-
-    y = system_state.field.gyro_frequency(r) / system_state.operating_frequency
-    y_vec = system_state.field.field_vec(r) * y.reshape(-1, 1)
-
-    y_squared = np.square(y)
-    x = np.square(system_state.atmosphere.plasma_frequency(r) / system_state.operating_frequency)
-    yt = Vector.row_dot_product(y_vec, t)
-
-    sign = -1
-    if system_state.is_extraordinary_ray:
-        sign = 1
-
-    # TODO: Fix real yp/pt solver
-    if use_cheater_solver:
-        solved_yp, solved_pt = calculate_yp_pt_cheating(yt)
-    else:
-        solved_yp, solved_pt = calculate_yp_pt_real(
-            x, y, y_squared, yt, sign=sign
-        )
-
-    current_mu2 = equation_15(solved_yp, x, y_squared, sign=sign)
-
-    dp_array = np.sqrt(current_mu2) * solved_pt * linalg.norm(r_dot, axis=1)
-    integration = simps(dp_array, dx=h)
-    if show:
-        fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
-        ax.plot(dp_array)
-        if save is not None:
-            fig.savefig(join_path("saved_plots", f'TotalPValues_{save}.png'))
-        else:
-            plt.show()
-        plt.close(fig)
-    return integration
-
-
-def off_diagonal_dirs(inputs):
-    system_state, index_pair, curr_path, int_h, vary_h, use_cheater_solver = inputs
-
-    # We know for a cubic spline, the derivative wrt parameter i within the integral only affects the spline
-    # in the interval (i - 2, i + 2) and for a quartic (i - 3, i + 3), so we consider
-    # two derivatives cannot affect each other if these intervals do not overlap.
-
-    if abs(index_pair[0] - index_pair[1]) > 9:
-        return np.array([index_pair[0], index_pair[1], 0])
-
-    path_mm = curr_path.adjust_parameters([index_pair[0], index_pair[1]], -vary_h)
-    p_mm = integrate_parameter(system_state, path_mm, h=int_h, use_cheater_solver=use_cheater_solver)
-    path_mp = curr_path.adjust_parameters([index_pair[0], index_pair[1]], [-vary_h, vary_h])
-    p_mp = integrate_parameter(system_state, path_mp, h=int_h, use_cheater_solver=use_cheater_solver)
-    path_pm = curr_path.adjust_parameters([index_pair[0], index_pair[1]], [vary_h, -vary_h])
-    p_pm = integrate_parameter(system_state, path_pm, h=int_h, use_cheater_solver=use_cheater_solver)
-    path_pp = curr_path.adjust_parameters([index_pair[0], index_pair[1]], vary_h)
-    p_pp = integrate_parameter(system_state, path_pp, h=int_h, use_cheater_solver=use_cheater_solver)
-    output = (p_pp - p_pm - p_mp + p_mm) / (4 * vary_h ** 2)
-
-    return np.array([index_pair[0], index_pair[1], output])
-
-
-# Calculate the diagonal elements and the gradient vector. These calculations involve the same function calls
-def diagonal_dirs(inputs):
-    system_state, varied_parameter, curr_path, int_h, vary_h, use_cheater_solver = inputs
-    path_minus = curr_path.adjust_parameters(varied_parameter, -vary_h)
-    path_plus = curr_path.adjust_parameters(varied_parameter, vary_h)
-    p_minus = integrate_parameter(system_state, path_minus, h=int_h, use_cheater_solver=use_cheater_solver)
-    p_plus = integrate_parameter(system_state, path_plus, h=int_h, use_cheater_solver=use_cheater_solver)
-    p_0 = integrate_parameter(system_state, curr_path, h=int_h, use_cheater_solver=use_cheater_solver)
-    dp_dx = (p_plus - p_minus) / (2 * vary_h)
-    d2pdx2 = (p_plus + p_minus - 2 * p_0) / (vary_h ** 2)
-    return np.array([varied_parameter, dp_dx, d2pdx2])
+class SystemState:
+    def __init__(
+            self, field: BaseField,
+            atmosphere: BaseAtmosphere,
+            operating_frequency: float,
+            is_extraordinary_ray: bool
+    ):
+        self.field, self.atmosphere = field, atmosphere
+        self.operating_frequency = operating_frequency
+        self.is_extraordinary_ray = is_extraordinary_ray
 
 
 class Tracer:
     def __init__(
             self,
             wave_frequency: float,
-            atmosphere_model: Atmosphere,
-            magnetic_field: Field,
-            path_initializer: Paths.QuasiParabolic,
+            atmosphere_model: BaseAtmosphere,
+            magnetic_field: BaseField,
+            path_initializer: BasePath,
             cores: Optional[int] = None
     ):
         if None in (wave_frequency, atmosphere_model, magnetic_field, path_initializer):
             raise ValueError("Model initializer parameters cannot be Null")
 
         self.field, self.atmosphere, = magnetic_field, atmosphere_model
-        self.initial_path = path_initializer
+        self.calculated_paths = [path_initializer]
         self.frequency = wave_frequency
 
-        self.initial_coordinates, self.final_coordinates = None, None
-
-        self.parameters = None
-        self.calculated_paths = None
         self.pool = None
 
         if cores is None:
@@ -130,29 +52,19 @@ class Tracer:
         else:
             self.cores = cores
 
-    def compile_initial_path(self, high_ray=True):
-        if self.initial_coordinates is None or self.final_coordinates is None:
-            raise ValueError("Initial and final coordinates must be defined before compiling")
-
-        self.initial_path.using_high_ray = high_ray
-        self.initial_path.compile_points()
-
-        new_path = GreatCircleDeviation(*self.parameters, quasi_parabolic=self.initial_path)
-        new_path.interpolate_params()
-
+    def replace_path(self, new_path: BasePath):
         self.calculated_paths = [new_path]
 
     def get_system_state(self, is_extraordinary_ray: bool):
         return SystemState(self.field, self.atmosphere, self.frequency, is_extraordinary_ray)
 
     def trace(
-            self, steps=50, h=1,
-            parameters=None,
+            self, h=10,
             debug_while_calculating=False,
             arrows=False,
             is_extraordinary_ray=False,
-            high_ray=False,
-            use_cheater_solver: Optional[bool] = True
+            use_cheater_solver: Optional[bool] = True,
+            max_steps: int = 10
     ):
         if self.pool is None:
             self.pool = mp.Pool(self.cores)
@@ -164,17 +76,10 @@ class Tracer:
         else:
             save_plots = False
 
-        if parameters is not None:
-            self.parameters = parameters
-        elif self.parameters is None:
-            self.parameters = Constants.DEFAULT_PARAMS
-
-        self.compile_initial_path(high_ray=high_ray)
-
         if debug_while_calculating:
             self.visualize(show_history=True)
 
-        for i in range(1, steps):
+        for i in range(1, max_steps):
             print(f"Preforming Newton Raphson Step {i}")
             matrix, gradient, change_vec = self.newton_raphson_step(
                 h=h, is_extraordinary_ray=is_extraordinary_ray, use_cheater_solver=use_cheater_solver
@@ -182,7 +87,7 @@ class Tracer:
 
             if debug_while_calculating:
                 fig, ax = self.visualize(show_history=True, show=False)
-                params = self.calculated_paths[-2].parameters
+                params = self.calculated_paths[-2].adjustable_parameters
                 total_angle = self.calculated_paths[-2].total_angle
                 if arrows:
                     for n, param in enumerate(params[::int(len(change_vec) / 25)]):
@@ -257,14 +162,14 @@ class Tracer:
                 )
                 break
 
-            if i == steps - 1:
+            if i == max_steps - 1:
                 print(
                     "Ending calculations because max step limit reached. "
                     "If convergence isn't complete, rerun with more steps"
                 )
         return self.calculated_paths
 
-    def newton_raphson_step(self, h=1, is_extraordinary_ray=False, use_cheater_solver=True):
+    def newton_raphson_step(self, h=10, is_extraordinary_ray=False, use_cheater_solver=True):
         matrix, gradient = self.calculate_derivatives(
             h=h,
             is_extraordinary_ray=is_extraordinary_ray,
@@ -275,27 +180,21 @@ class Tracer:
         except linalg.LinAlgError:
             warnings.warn(
                 "Using pseudo-inverse to solve matrix equation because matrix is near-singular.\n"
-                "Consider using less parameters, or having no normal-component parameters for this system"
+                "Consider using less parameters, or having no angular parameters for this system"
             )
             change = np.matmul(linalg.pinvh(matrix), gradient)
         change_mag = linalg.norm(change)
         print(f"Change magnitude: {change_mag}")
 
-        next_params = self.calculated_paths[-1].parameters[:, 1] - change
-        next_path = GreatCircleDeviation(
-            *self.parameters, initial_parameters=next_params,
-            initial_coordinate=self.initial_coordinates,
-            final_coordinate=self.final_coordinates
-        )
+        next_path = self.calculated_paths[-1].adjust_parameters(np.arange(change.shape[0]), -change)
         self.calculated_paths.append(next_path)
         return matrix, gradient, change
 
-    def calculate_derivatives(self, h=1, is_extraordinary_ray=False, use_cheater_solver=True):
+    def calculate_derivatives(self, h=10, is_extraordinary_ray=False, use_cheater_solver=True):
         # We need to make sure our integration step size is significantly smaller than our derivative
         #   or else our truncation error will be too large
         integration_step = 1 / 2000.0
-
-        parameter_number = self.parameters[0] + self.parameters[1]
+        parameter_number = self.calculated_paths[-1].adjustable_parameters.shape[0]
 
         # dP/da_i
         gradient = np.zeros((parameter_number,))
@@ -363,7 +262,12 @@ class Tracer:
         if fig is None or ax is None:
             fig, ax = plt.subplots(figsize=(6, 4.5), num=0)
             ax.set_title(f"3D Ray Trace with a {int(self.frequency / 1E6)} MHz frequency")
-            self.atmosphere.visualize(self.initial_coordinates, self.final_coordinates, fig=fig, ax=ax, point_number=200)
+            self.atmosphere.visualize(
+                self.calculated_paths[0](0),
+                self.calculated_paths[0](1),
+                fig=fig,
+                ax=ax,
+            )
             ax.autoscale(False)
             ax.set_ylabel("Altitude (km)")
             ax.set_xlabel("Range (km)")
@@ -374,20 +278,23 @@ class Tracer:
             else:
                 custom_lines = [Line2D([0], [0], color='black', lw=4)]
                 ax.legend(custom_lines, ['Best Trace'])
+
+        evaluations = np.linspace(0, 1, 200)
         if show_history:
             for i in range(len(self.calculated_paths) - 1):
                 path = self.calculated_paths[i]
-                radii = path.radial_points[:, 1]
-                radii = (radii - EARTH_RADIUS) / 1000
-                km_range = path.radial_points[:, 0] * path.total_angle * EARTH_RADIUS / 1000
+                points = path(evaluations)
+                radii = (linalg.norm(points, axis=-1) - EARTH_RADIUS) / 1000
+                km_range = evaluations * path.total_angle * EARTH_RADIUS / 1000
                 ax.plot(km_range, radii, color='white')
 
-        # We always plot the last ones
+        # We always plot the current ones
         path = self.calculated_paths[-1]
-        radii = path.radial_points[:, 1]
-        radii = (radii - EARTH_RADIUS) / 1000
-        km_range = path.radial_points[:, 0] * path.total_angle * EARTH_RADIUS / 1000
+        points = path(evaluations)
+        radii = (linalg.norm(points, axis=-1) - EARTH_RADIUS) / 1000
+        km_range = evaluations * path.total_angle * EARTH_RADIUS / 1000
         ax.plot(km_range, radii, color=color)
+
         if show:
             plt.show()
             plt.close(fig)
@@ -400,3 +307,85 @@ class Tracer:
             self.pool.close()
             self.pool.terminate()
             self.pool = None
+
+
+def integrate_parameter(
+        system_state: SystemState,
+        path: BasePath, h=0.00001,
+        show=False, save=None,
+        use_cheater_solver=True
+):
+    step_number = int(1 / h)
+    r = path(np.linspace(0, 1, step_number), nu=0)
+    r_dot = path(np.linspace(0, 1, step_number), nu=1)
+    r_dot_norm = linalg.norm(r_dot, axis=1)
+    t = r_dot / r_dot_norm.reshape(-1, 1)
+
+    y = system_state.field.gyro_frequency(r) / system_state.operating_frequency
+    y_vec = system_state.field.field_vec(r) * y.reshape(-1, 1)
+
+    y_squared = np.square(y)
+    x = np.square(system_state.atmosphere.plasma_frequency(r) / system_state.operating_frequency)
+    yt = Vector.row_dot_product(y_vec, t)
+
+    sign = -1
+    if system_state.is_extraordinary_ray:
+        sign = 1
+
+    # TODO: Fix real yp/pt solver
+    if use_cheater_solver:
+        solved_yp, solved_pt = calculate_yp_pt_cheating(yt)
+    else:
+        solved_yp, solved_pt = calculate_yp_pt_real(
+            x, y, y_squared, yt, sign=sign
+        )
+
+    current_mu2 = equation_15(solved_yp, x, y_squared, sign=sign)
+
+    dp_array = np.sqrt(current_mu2) * solved_pt * r_dot_norm
+    integration = simps(dp_array, dx=h)
+    if show:
+        fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
+        ax.plot(dp_array)
+        if save is not None:
+            fig.savefig(join_path("saved_plots", f'TotalPValues_{save}.png'))
+        else:
+            plt.show()
+        plt.close(fig)
+    return integration
+
+
+def off_diagonal_dirs(inputs):
+    system_state, index_pair, curr_path, int_h, vary_h, use_cheater_solver = inputs
+
+    # We know for a cubic spline, the derivative wrt parameter i within the integral only affects the spline
+    # in the interval (i - 2, i + 2) and for a quartic (i - 3, i + 3), so we consider
+    # two derivatives cannot affect each other if these intervals do not overlap.
+
+    if abs(index_pair[0] - index_pair[1]) > 9:
+        return np.array([index_pair[0], index_pair[1], 0])
+
+    path_mm = curr_path.adjust_parameters([index_pair[0], index_pair[1]], -vary_h)
+    p_mm = integrate_parameter(system_state, path_mm, h=int_h, use_cheater_solver=use_cheater_solver)
+    path_mp = curr_path.adjust_parameters([index_pair[0], index_pair[1]], [-vary_h, vary_h])
+    p_mp = integrate_parameter(system_state, path_mp, h=int_h, use_cheater_solver=use_cheater_solver)
+    path_pm = curr_path.adjust_parameters([index_pair[0], index_pair[1]], [vary_h, -vary_h])
+    p_pm = integrate_parameter(system_state, path_pm, h=int_h, use_cheater_solver=use_cheater_solver)
+    path_pp = curr_path.adjust_parameters([index_pair[0], index_pair[1]], vary_h)
+    p_pp = integrate_parameter(system_state, path_pp, h=int_h, use_cheater_solver=use_cheater_solver)
+    output = (p_pp - p_pm - p_mp + p_mm) / (4 * vary_h ** 2)
+
+    return np.array([index_pair[0], index_pair[1], output])
+
+
+# Calculate the diagonal elements and the gradient vector. These calculations involve the same function calls
+def diagonal_dirs(inputs):
+    system_state, varied_parameter, curr_path, int_h, vary_h, use_cheater_solver = inputs
+    path_minus = curr_path.adjust_parameters(varied_parameter, -vary_h)
+    path_plus = curr_path.adjust_parameters(varied_parameter, vary_h)
+    p_minus = integrate_parameter(system_state, path_minus, h=int_h, use_cheater_solver=use_cheater_solver)
+    p_plus = integrate_parameter(system_state, path_plus, h=int_h, use_cheater_solver=use_cheater_solver)
+    p_0 = integrate_parameter(system_state, curr_path, h=int_h, use_cheater_solver=use_cheater_solver)
+    dp_dx = (p_plus - p_minus) / (2 * vary_h)
+    d2pdx2 = (p_plus + p_minus - 2 * p_0) / (vary_h ** 2)
+    return np.array([varied_parameter, dp_dx, d2pdx2])

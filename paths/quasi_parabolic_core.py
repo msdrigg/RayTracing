@@ -7,11 +7,13 @@ the 1968 Croft and Hoogasian paper on the same topic.
 I will cite each equation as it comes from that paper.
 """
 
+from typing import Tuple, Optional
+
+import math
 import numpy as np
 from scipy import optimize
-import Coordinates as coords
-import math
-from typing import Tuple, Optional
+
+from utilities import Coordinates as coords
 
 
 def calculate_param_a(
