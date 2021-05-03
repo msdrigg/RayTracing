@@ -1,12 +1,12 @@
 """
 Utilities to help with parallel processing
 """
-from multiprocessing import shared_memory
-import multiprocessing as mp
+import typing
 from contextlib import contextmanager
+from multiprocessing import shared_memory
+
 import numpy as np
 from numpy.typing import ArrayLike
-import typing
 
 
 @contextmanager

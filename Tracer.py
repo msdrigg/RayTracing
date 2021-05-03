@@ -9,14 +9,13 @@ import numpy as np
 from scipy.integrate import simps
 from scipy import linalg
 
-import Constants
 import Paths
 import Vector
 from Atmosphere import Atmosphere
 from Constants import EARTH_RADIUS
 from Equations import equation_15, calculate_yp_pt_cheating, calculate_yp_pt_real
 from Field import Field
-from Paths import GreatCircleDeviation, Path
+from Paths import Path
 
 from SystemState import SystemState
 
@@ -24,7 +23,7 @@ from SystemState import SystemState
 def integrate_parameter(
         system_state: SystemState,
         path: Path, h=0.00001,
-        show=False, save=False,
+        show=False, save=None,
         use_cheater_solver=True
 ):
     step_number = int(1 / h)
@@ -54,7 +53,7 @@ def integrate_parameter(
 
     current_mu2 = equation_15(solved_yp, x, y_squared, sign=sign)
 
-    dp_array = np.sqrt(current_mu2) * solved_pt * linalg.norm(r_dot, axis=1)
+    dp_array = np.sqrt(current_mu2) * solved_pt * r_dot_norm
     integration = simps(dp_array, dx=h)
     if show:
         fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
@@ -109,20 +108,16 @@ class Tracer:
             wave_frequency: float,
             atmosphere_model: Atmosphere,
             magnetic_field: Field,
-            path_initializer: Paths.QuasiParabolic,
+            path_initializer: Paths.Path,
             cores: Optional[int] = None
     ):
         if None in (wave_frequency, atmosphere_model, magnetic_field, path_initializer):
             raise ValueError("Model initializer parameters cannot be Null")
 
         self.field, self.atmosphere, = magnetic_field, atmosphere_model
-        self.initial_path = path_initializer
+        self.calculated_paths = [path_initializer]
         self.frequency = wave_frequency
 
-        self.initial_coordinates, self.final_coordinates = None, None
-
-        self.parameters = None
-        self.calculated_paths = None
         self.pool = None
 
         if cores is None:
@@ -130,19 +125,7 @@ class Tracer:
         else:
             self.cores = cores
 
-    def compile_initial_path(self, high_ray=True):
-        if self.initial_coordinates is None or self.final_coordinates is None:
-            raise ValueError("Initial and final coordinates must be defined before compiling")
-
-        self.initial_path.using_high_ray = high_ray
-        self.initial_path.compile_points()
-
-        new_path = GreatCircleDeviation.from_path(
-            np.linspace(0, 1, self.parameters[0] + 2), np.linspace(0, 1, self.parameters[1] + 2),
-            other_path=self.initial_path
-        )
-        new_path.interpolate_params()
-
+    def replace_path(self, new_path: Path):
         self.calculated_paths = [new_path]
 
     def get_system_state(self, is_extraordinary_ray: bool):
@@ -150,11 +133,9 @@ class Tracer:
 
     def trace(
             self, h=10,
-            parameters=None,
             debug_while_calculating=False,
             arrows=False,
             is_extraordinary_ray=False,
-            high_ray=False,
             use_cheater_solver: Optional[bool] = True,
             max_steps: int = 10
     ):
@@ -167,13 +148,6 @@ class Tracer:
             save_plots = True
         else:
             save_plots = False
-
-        if parameters is not None:
-            self.parameters = parameters
-        elif self.parameters is None:
-            self.parameters = Constants.DEFAULT_PARAMS
-
-        self.compile_initial_path(high_ray=high_ray)
 
         if debug_while_calculating:
             self.visualize(show_history=True)
@@ -285,12 +259,7 @@ class Tracer:
         change_mag = linalg.norm(change)
         print(f"Change magnitude: {change_mag}")
 
-        next_params = self.calculated_paths[-1].adjustable_parameters - change
-        next_path = GreatCircleDeviation.__old_init__(
-            *self.parameters, initial_parameters=next_params,
-            initial_coordinate=self.initial_coordinates,
-            final_coordinate=self.final_coordinates
-        )
+        next_path = self.calculated_paths[-1].adjust_parameters(np.arange(change.shape[0]), -change)
         self.calculated_paths.append(next_path)
         return matrix, gradient, change
 
@@ -298,8 +267,7 @@ class Tracer:
         # We need to make sure our integration step size is significantly smaller than our derivative
         #   or else our truncation error will be too large
         integration_step = 1 / 2000.0
-
-        parameter_number = self.parameters[0] + self.parameters[1]
+        parameter_number = self.calculated_paths[-1].adjustable_parameters.shape[0]
 
         # dP/da_i
         gradient = np.zeros((parameter_number,))
@@ -367,7 +335,13 @@ class Tracer:
         if fig is None or ax is None:
             fig, ax = plt.subplots(figsize=(6, 4.5), num=0)
             ax.set_title(f"3D Ray Trace with a {int(self.frequency / 1E6)} MHz frequency")
-            self.atmosphere.visualize(self.initial_coordinates, self.final_coordinates, fig=fig, ax=ax, point_number=200)
+            self.atmosphere.visualize(
+                self.calculated_paths[0](0),
+                self.calculated_paths[0](1),
+                fig=fig,
+                ax=ax,
+                point_number=200
+            )
             ax.autoscale(False)
             ax.set_ylabel("Altitude (km)")
             ax.set_xlabel("Range (km)")
@@ -378,20 +352,23 @@ class Tracer:
             else:
                 custom_lines = [Line2D([0], [0], color='black', lw=4)]
                 ax.legend(custom_lines, ['Best Trace'])
+
+        evaluations = np.linspace(0, 1, 200)
         if show_history:
             for i in range(len(self.calculated_paths) - 1):
                 path = self.calculated_paths[i]
-                radii = path.radial_points[:, 1]
-                radii = (radii - EARTH_RADIUS) / 1000
-                km_range = path.radial_points[:, 0] * path.total_angle * EARTH_RADIUS / 1000
+                points = path(evaluations)
+                radii = (linalg.norm(points, axis=-1) - EARTH_RADIUS) / 1000
+                km_range = evaluations * path.total_angle * EARTH_RADIUS / 1000
                 ax.plot(km_range, radii, color='white')
 
-        # We always plot the last ones
+        # We always plot the current ones
         path = self.calculated_paths[-1]
-        radii = path.radial_points[:, 1]
-        radii = (radii - EARTH_RADIUS) / 1000
-        km_range = path.radial_points[:, 0] * path.total_angle * EARTH_RADIUS / 1000
+        points = path(evaluations)
+        radii = (linalg.norm(points, axis=-1) - EARTH_RADIUS) / 1000
+        km_range = evaluations * path.total_angle * EARTH_RADIUS / 1000
         ax.plot(km_range, radii, color=color)
+
         if show:
             plt.show()
             plt.close(fig)

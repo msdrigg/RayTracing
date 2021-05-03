@@ -81,22 +81,17 @@ def cartesian_to_spherical(cartesian: np.ndarray) -> np.ndarray:
 # (radius, 'distance in radians along path', 'normal distance in radians to path')
 def standard_to_path_component(
         standard: np.ndarray,
-        path_start_spherical: np.ndarray,
-        path_end_spherical: np.ndarray) -> np.ndarray:
+        cartesian_start: np.ndarray,
+        cartesian_end: np.ndarray) -> np.ndarray:
     """
     Converts coordinates to path component form (distance along path (along earths surface),
         distance normal to path (along earths surface), height (above earths surface))
     :param standard: the coordinate or array of coordinates to rotate (in some standard form)
-    :param path_start_spherical: the coordinate of path start (spherical coordinates)
-    :param path_end_spherical: the coordinate of the path end (spherical coordinates)
+    :param cartesian_start: the coordinate of path start (spherical coordinates)
+    :param cartesian_end: the coordinate of the path end (spherical coordinates)
     :return: coordinate or array of coordinates in path component form
     """
     cartesian = standard
-    spherical = np.empty(1)
-
-    # Path start and end
-    cartesian_start = spherical_to_cartesian(path_start_spherical)
-    cartesian_end = spherical_to_cartesian(path_end_spherical)
 
     path_components = np.empty_like(cartesian, dtype=float)
 
@@ -111,15 +106,15 @@ def standard_to_path_component(
     path_components[..., 1] = vector.angle_between_vector_collections(
         cartesian_start,
         vectors_projected_onto_plane
-    ) * EARTH_RADIUS * np.sign(vector.row_dot_product(
+    ) * np.sign(vector.row_dot_product(
         np.cross(np.atleast_2d(cartesian_start), vectors_projected_onto_plane),
-        normal_vec_to_plane)
-    )
+        normal_vec_to_plane
+    ))
 
     path_components[..., 2] = vector.angle_between_vector_collections(
         vectors_projected_onto_plane,
         cartesian
-    ) * EARTH_RADIUS * np.sign(vector_normal_component)
+    ) * np.sign(vector_normal_component)
 
     path_components[..., 0] = linalg.norm(cartesian, axis=-1)
 
@@ -144,7 +139,7 @@ def path_component_to_standard(
 
     # Make sure we have positive rotation vector
     rotations = Rotation.from_rotvec(
-        np.outer(path_components[..., 1] / EARTH_RADIUS, unit_normal_vector_to_path)
+        np.outer(path_components[..., 1], unit_normal_vector_to_path)
     )
     vecs_along_path = rotations.apply(path_start_cartesian)
 
@@ -158,7 +153,7 @@ def path_component_to_standard(
         np.einsum(
             "ij,i->ij",
             unit_rotation_vecs,
-            np.atleast_1d(path_components[..., 2] / EARTH_RADIUS)
+            np.atleast_1d(path_components[..., 2] )
         )
     )
 

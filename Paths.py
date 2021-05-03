@@ -287,86 +287,6 @@ class GreatCircleDeviation(Path):
             radial_params, angular_params, initial_point, final_point
         )
 
-    @staticmethod
-    def __old_init__(
-            radial_deviations: typing.Union[int, ArrayLike],
-            angular_deviations: typing.Union[int, ArrayLike],
-            **kwargs
-    ):
-        self = GreatCircleDeviation(np.array([1, 1]), np.array([1, 1]), np.array([1, 2, 3]), np.array([2, 3, 4]))
-        # Set the position of all parameters by concatenating the lists of radial deviations and angular deviations
-        # Position is the angular location along the great circle connecting initial and final points
-        if isinstance(radial_deviations, int) or isinstance(angular_deviations, int):
-            radial_deviations = linspace(0, 1, radial_deviations + 2)
-            angular_deviations = linspace(0, 1, angular_deviations + 2)
-        else:
-            new_radii = zeros((len(radial_deviations) + 2))
-            new_thetas = zeros((len(angular_deviations) + 2))
-            new_radii[1:-1] = radial_deviations
-            new_thetas[1:-1] = angular_deviations
-            new_radii[-1] = 1
-            new_thetas[-1] = 1
-            radial_deviations = new_radii
-            angular_deviations = new_thetas
-
-        self.radial_param_number, self.angular_param_number = len(radial_deviations), len(angular_deviations)
-
-        # Each parameter is represented by a 2-vector: (position, value)
-        # The extra 2 parameters are static parameters which correspond to fixing the start and end points
-        self._radial_parameters = zeros((self.radial_param_number, 2))
-        self._angular_parameters = zeros((self.angular_param_number, 2))
-        self._radial_parameters[:, 0] = radial_deviations
-        self._angular_parameters[:, 0] = angular_deviations
-
-        # Set to either the provided value or None
-        self.initial_point, self.final_point = None, None
-        if 'initial_coordinate' in kwargs and 'final_coordinate' in kwargs:
-            self.initial_point, self.final_point = kwargs['initial_coordinate'], kwargs['final_coordinate']
-
-        # We provide 3 ways to initialize the parameters
-        # Initialize with full parameters in one array
-        # We must provide initial and final point if we choose to use the 'initial_parameters' kwarg
-        if "initial_parameters" in kwargs:
-            init_params = kwargs["initial_parameters"]
-            self._radial_parameters[0, 1] = norm(self.initial_point)
-            self._radial_parameters[1:-1, 1] = init_params[:self.radial_param_number - 2]
-            self._angular_parameters[1:-1, 1] = init_params[self.radial_param_number - 2:]
-            self._radial_parameters[-1, 1] = norm(self.final_point)
-
-        # Right and left are defined by start and end points
-        # We must provide initial and final point if we choose to use the 'initial_radial_parameters' kwarg
-        elif 'initial_radial_parameters' in kwargs and 'initial_angular_parameters' in kwargs:
-            self._radial_parameters[0, 1] = norm(self.initial_point)
-            self._radial_parameters[1:-1, 1] = kwargs['initial_radial_parameters']
-            self._angular_parameters[1:-1, 1] = kwargs['initial_angular_parameters']
-            self._radial_parameters[-1, 1] = norm(self.final_point)
-
-        # Initialize with the QuasiParabolic path
-        # We don't need initial and final point provided if we use this path kwarg
-        elif 'quasi_parabolic' in kwargs:
-            qp_initial = kwargs['quasi_parabolic']
-            self.initial_point = qp_initial(0)
-            self.final_point = qp_initial(1)
-            self.initial_point, self.final_point = qp_initial.initial_point, qp_initial.final_point
-            total_angle = Vector.angle_between(self.initial_point, self.final_point)
-            self._radial_parameters[:, 1] = qp_initial.poly_fit(radial_deviations*total_angle)
-            self._radial_parameters[0, 1] = norm(qp_initial(0))
-            self._radial_parameters[-1, 1] = norm(qp_initial(1))
-
-        self.final_point = Vector.unit_vector(self.final_point)
-        self.initial_point = Vector.unit_vector(self.initial_point)
-
-        self.normal_vec = cross(self.initial_point, self.final_point)
-        self.normal_vec = Vector.unit_vector(self.normal_vec)
-
-        self._total_angle = None
-
-        self._poly_fit_angular = None
-        self._poly_fit_radial = None
-        self._poly_fit_cartesian = None
-
-        return self
-
     @property
     def radial_points(self):
         return self._radial_parameters
@@ -427,31 +347,6 @@ class GreatCircleDeviation(Path):
             self.interpolate_params()
         return self._poly_fit_cartesian
 
-    def adjust_parameters(self, indexes, adjustments):
-        # TODO: Add some parameters to control the adjustment rate to account for unresponsive parameters
-        #  specifically radial params in the case of GCD path
-        adjusted_params = self.adjustable_parameters
-        indexes = asarray(indexes).flatten()
-        copied_adjustments = asarray(adjustments).flatten()
-        if len(indexes) != len(copied_adjustments):
-            copied_adjustments = np.repeat(copied_adjustments, len(indexes))
-        copied_adjustments[indexes >= self._radial_parameters.shape[0] - 2] = \
-            copied_adjustments[indexes >= self._radial_parameters.shape[0] - 2]/EARTH_RADIUS
-        adjusted_params[indexes] = adjusted_params[indexes] + copied_adjustments
-        if self._poly_fit_cartesian is None:
-            self.interpolate_params()
-
-        new_path = GreatCircleDeviation.__old_init__(
-            self._radial_parameters.shape[0] - 2,
-            self._angular_parameters.shape[0] - 2,
-            initial_parameters=adjusted_params,
-            initial_coordinate=self(0),
-            final_coordinate=self(1)
-        )
-
-        new_path.interpolate_params()
-        return new_path
-
     def interpolate_params(self, radial=False, degree=3):
         self._total_angle = Vector.angle_between(self.initial_point, self.final_point)
 
@@ -475,7 +370,7 @@ class GreatCircleDeviation(Path):
             for index in range(len(self._radial_parameters)):
                 alpha = self._radial_parameters[index, 0]
                 r_1 = Rotation.from_rotvec(self.normal_vec * alpha * self.total_angle)
-                v_1 = r_1.apply(self.initial_point)
+                v_1 = r_1.apply(Vector.unit_vector(self.initial_point))
                 rotation_vec_2 = Vector.unit_vector(cross(self.normal_vec, v_1))
                 rotation_vec_2 *= self._poly_fit_angular(alpha)
                 r_2 = Rotation.from_rotvec(rotation_vec_2)
