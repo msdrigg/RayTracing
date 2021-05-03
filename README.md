@@ -94,6 +94,9 @@ This object must subclass the `BasePath` class.
 Please review the [supporting paper](Report.pdf), 
 and read the comments provided within the code. Good luck tracing!
 
+## Acknowledgements
+This work was made possible with the help and support of Dr. Stephen Kaeppler. Thank you.
+
 ## Citing this Work
 This work is licensed under a [Creative Commons Attribution 4.0 International License][cc-by]. Please use [this doi link](https://doi.org/10.5281/zenodo.4734289) to cite this software.
 
