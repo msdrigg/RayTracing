@@ -48,6 +48,7 @@ if __name__ == "__main__":
     basic_tracer.compile_initial_path()
 
     basic_tracer.trace(h=10, high_ray=True, max_steps=4, debug_while_calculating=True)
+
     fig, ax = basic_tracer.visualize(show=True)
     basic_tracer.trace(h=10, high_ray=False)
     fig, ax = basic_tracer.visualize(fig=fig, ax=ax, show=False)

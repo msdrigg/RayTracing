@@ -446,8 +446,7 @@ class GreatCircleDeviation(Path):
             self._angular_parameters.shape[0] - 2,
             initial_parameters=adjusted_params,
             initial_coordinate=self(0),
-            final_coordinate=self(1),
-            using_spherical=False
+            final_coordinate=self(1)
         )
 
         new_path.interpolate_params()
