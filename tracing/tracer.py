@@ -32,18 +32,18 @@ class SystemState:
 class Tracer:
     def __init__(
             self,
-            wave_frequency: float,
+            operating_frequency: float,
             atmosphere_model: BaseAtmosphere,
             magnetic_field: BaseField,
             path_initializer: BasePath,
             cores: Optional[int] = None
     ):
-        if None in (wave_frequency, atmosphere_model, magnetic_field, path_initializer):
+        if None in (operating_frequency, atmosphere_model, magnetic_field, path_initializer):
             raise ValueError("Model initializer parameters cannot be Null")
 
         self.field, self.atmosphere, = magnetic_field, atmosphere_model
         self.calculated_paths = [path_initializer]
-        self.frequency = wave_frequency
+        self.frequency = operating_frequency
 
         self.pool = None
 
