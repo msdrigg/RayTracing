@@ -22,7 +22,7 @@ possible.
 ## Setup
 
 To set up this repository, perform the following steps
-  1. Install Python on your computer
+  1. Install Python on your computer (this repository has been tested with versions 3.9.4 and 3.8.5)
   2. Clone the contents of this repository onto your computer.
   3. Open a terminal in the project's root directory
   4. (Optional) Setup a virtual environment to 
