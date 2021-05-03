@@ -17,7 +17,7 @@ import matplotlib as mpl
 mpl.rcParams['figure.dpi'] = 500
 
 if __name__ == "__main__":
-    field = Field.DipoleField()
+    field = Field.ZeroField()
     path_start_point = Vector.spherical_to_cartesian(
         Vector.latitude_to_spherical(
             np.array([EARTH_RADIUS, 90 + 23.5, 133.7])))
@@ -28,12 +28,12 @@ if __name__ == "__main__":
     atmosphere_critical_frequency = 7E6
     atmosphere_altitude_of_max = 350E3
     atmosphere_semi_width = 100E3
-    atmosphere_gradient = (0.375E6 * 180 / math.pi, -1)
+    atmosphere_gradient = (0.1E6 * 180 / math.pi, -1)
     atmosphere = ChapmanLayers(
         atmosphere_critical_frequency,
         atmosphere_altitude_of_max,
         atmosphere_semi_width,
-        None,
+        atmosphere_gradient,
         path_start_point
     )
     # atmosphere = ChapmanLayers(7E6, 350E3, 100E3, None, initial)
