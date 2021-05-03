@@ -149,7 +149,7 @@ class Tracer:
         return SystemState(self.field, self.atmosphere, self.frequency, is_extraordinary_ray)
 
     def trace(
-            self, h=1,
+            self, h=10,
             parameters=None,
             debug_while_calculating=False,
             arrows=False,
@@ -268,7 +268,7 @@ class Tracer:
                 )
         return self.calculated_paths
 
-    def newton_raphson_step(self, h=1, is_extraordinary_ray=False, use_cheater_solver=True):
+    def newton_raphson_step(self, h=10, is_extraordinary_ray=False, use_cheater_solver=True):
         matrix, gradient = self.calculate_derivatives(
             h=h,
             is_extraordinary_ray=is_extraordinary_ray,
@@ -294,7 +294,7 @@ class Tracer:
         self.calculated_paths.append(next_path)
         return matrix, gradient, change
 
-    def calculate_derivatives(self, h=1, is_extraordinary_ray=False, use_cheater_solver=True):
+    def calculate_derivatives(self, h=10, is_extraordinary_ray=False, use_cheater_solver=True):
         # We need to make sure our integration step size is significantly smaller than our derivative
         #   or else our truncation error will be too large
         integration_step = 1 / 2000.0

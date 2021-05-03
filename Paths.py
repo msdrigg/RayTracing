@@ -427,6 +427,32 @@ class GreatCircleDeviation(Path):
             self.interpolate_params()
         return self._poly_fit_cartesian
 
+    def adjust_parameters(self, indexes, adjustments):
+        # TODO: Add some parameters to control the adjustment rate to account for unresponsive parameters
+        #  specifically radial params in the case of GCD path
+        adjusted_params = self.adjustable_parameters
+        indexes = asarray(indexes).flatten()
+        copied_adjustments = asarray(adjustments).flatten()
+        if len(indexes) != len(copied_adjustments):
+            copied_adjustments = np.repeat(copied_adjustments, len(indexes))
+        copied_adjustments[indexes >= self._radial_parameters.shape[0] - 2] = \
+            copied_adjustments[indexes >= self._radial_parameters.shape[0] - 2]/EARTH_RADIUS
+        adjusted_params[indexes] = adjusted_params[indexes] + copied_adjustments
+        if self._poly_fit_cartesian is None:
+            self.interpolate_params()
+
+        new_path = GreatCircleDeviation.__old_init__(
+            self._radial_parameters.shape[0] - 2,
+            self._angular_parameters.shape[0] - 2,
+            initial_parameters=adjusted_params,
+            initial_coordinate=self(0),
+            final_coordinate=self(1),
+            using_spherical=False
+        )
+
+        new_path.interpolate_params()
+        return new_path
+
     def interpolate_params(self, radial=False, degree=3):
         self._total_angle = Vector.angle_between(self.initial_point, self.final_point)
 
