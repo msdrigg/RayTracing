@@ -137,7 +137,10 @@ class Tracer:
         self.initial_path.using_high_ray = high_ray
         self.initial_path.compile_points()
 
-        new_path = GreatCircleDeviation(*self.parameters, quasi_parabolic=self.initial_path)
+        new_path = GreatCircleDeviation.from_path(
+            np.linspace(0, 1, self.parameters[0] + 2), np.linspace(0, 1, self.parameters[1] + 2),
+            other_path=self.initial_path
+        )
         new_path.interpolate_params()
 
         self.calculated_paths = [new_path]
@@ -146,13 +149,14 @@ class Tracer:
         return SystemState(self.field, self.atmosphere, self.frequency, is_extraordinary_ray)
 
     def trace(
-            self, steps=50, h=1,
+            self, h=1,
             parameters=None,
             debug_while_calculating=False,
             arrows=False,
             is_extraordinary_ray=False,
             high_ray=False,
-            use_cheater_solver: Optional[bool] = True
+            use_cheater_solver: Optional[bool] = True,
+            max_steps: int = 10
     ):
         if self.pool is None:
             self.pool = mp.Pool(self.cores)
@@ -174,7 +178,7 @@ class Tracer:
         if debug_while_calculating:
             self.visualize(show_history=True)
 
-        for i in range(1, steps):
+        for i in range(1, max_steps):
             print(f"Preforming Newton Raphson Step {i}")
             matrix, gradient, change_vec = self.newton_raphson_step(
                 h=h, is_extraordinary_ray=is_extraordinary_ray, use_cheater_solver=use_cheater_solver
@@ -182,7 +186,7 @@ class Tracer:
 
             if debug_while_calculating:
                 fig, ax = self.visualize(show_history=True, show=False)
-                params = self.calculated_paths[-2].parameters
+                params = self.calculated_paths[-2].adjustable_parameters
                 total_angle = self.calculated_paths[-2].total_angle
                 if arrows:
                     for n, param in enumerate(params[::int(len(change_vec) / 25)]):
@@ -257,7 +261,7 @@ class Tracer:
                 )
                 break
 
-            if i == steps - 1:
+            if i == max_steps - 1:
                 print(
                     "Ending calculations because max step limit reached. "
                     "If convergence isn't complete, rerun with more steps"
@@ -281,8 +285,8 @@ class Tracer:
         change_mag = linalg.norm(change)
         print(f"Change magnitude: {change_mag}")
 
-        next_params = self.calculated_paths[-1].parameters[:, 1] - change
-        next_path = GreatCircleDeviation(
+        next_params = self.calculated_paths[-1].adjustable_parameters - change
+        next_path = GreatCircleDeviation.__old_init__(
             *self.parameters, initial_parameters=next_params,
             initial_coordinate=self.initial_coordinates,
             final_coordinate=self.final_coordinates

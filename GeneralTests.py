@@ -33,7 +33,7 @@ def test_integration():
     tracer.parameter_number = 100
     tracer.initial_coordinates, tracer.final_coordinates = initial, final
     tracer.compile_initial_path()
-    params = tracer.calculated_paths[0].parameters
+    params = tracer.calculated_paths[0].adjustable_parameters
     indexes = arange(tracer.parameters[0])
 
     # tracer.calculated_paths[0].adjust_parameters(
@@ -72,7 +72,7 @@ def test_qp_model():
     tracer.parameter_number = sum(tracer_parameters)
     tracer.initial_coordinates, tracer.final_coordinates = initial, final
     tracer.compile_initial_path()
-    params = tracer.calculated_paths[0].parameters
+    params = tracer.calculated_paths[0].adjustable_parameters
     indexes = arange(tracer.parameters[0])
     initial_path = tracer.calculated_paths[0]
     # new_path = tracer.calculated_paths[0].adjust_parameters(

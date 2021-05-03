@@ -82,23 +82,17 @@ def cartesian_to_spherical(cartesian: np.ndarray) -> np.ndarray:
 def standard_to_path_component(
         standard: np.ndarray,
         path_start_spherical: np.ndarray,
-        path_end_spherical: np.ndarray,
-        from_spherical: Optional[bool] = True) -> np.ndarray:
+        path_end_spherical: np.ndarray) -> np.ndarray:
     """
     Converts coordinates to path component form (distance along path (along earths surface),
         distance normal to path (along earths surface), height (above earths surface))
     :param standard: the coordinate or array of coordinates to rotate (in some standard form)
     :param path_start_spherical: the coordinate of path start (spherical coordinates)
     :param path_end_spherical: the coordinate of the path end (spherical coordinates)
-    :param from_spherical: if true, assume components are spherical, else they are cartesian
     :return: coordinate or array of coordinates in path component form
     """
-    if from_spherical:
-        spherical = standard
-        cartesian = spherical_to_cartesian(standard)
-    else:
-        cartesian = standard
-        spherical = np.empty(1)
+    cartesian = standard
+    spherical = np.empty(1)
 
     # Path start and end
     cartesian_start = spherical_to_cartesian(path_start_spherical)
@@ -127,39 +121,32 @@ def standard_to_path_component(
         cartesian
     ) * EARTH_RADIUS * np.sign(vector_normal_component)
 
-    if from_spherical:
-        path_components[..., 0] = spherical[..., 0] - EARTH_RADIUS
-    else:
-        path_components[..., 0] = linalg.norm(cartesian, axis=-1) - EARTH_RADIUS
+    path_components[..., 0] = linalg.norm(cartesian, axis=-1)
 
     return path_components
 
 
 def path_component_to_standard(
         path_components: np.ndarray,
-        path_start_spherical: np.ndarray,
-        path_end_spherical: np.ndarray,
-        to_spherical: Optional[bool] = True) -> np.ndarray:
+        path_start_cartesian: np.ndarray,
+        path_end_cartesian: np.ndarray) -> np.ndarray:
     """
     NOTE: path_start and path_end cannot be at opposite poles
         (obviously, because then path between them is arbitrary)
     :param path_components: the coordinate or array of coordinates to rotate (in path component form)
-    :param path_start_spherical: the coordinate of path start (spherical coordinates)
-    :param path_end_spherical: the coordinate of the path end (spherical coordinates)
-    :param to_spherical: if true, return spherical, else return cartesian
+    :param path_start_cartesian: the coordinate of path start (spherical coordinates)
+    :param path_end_cartesian: the coordinate of the path end (spherical coordinates)
     :return: coordinate or array of coordinates in spherical coordinates
     """
-    cartesian_start = spherical_to_cartesian(path_start_spherical)
-    cartesian_end = spherical_to_cartesian(path_end_spherical)
 
-    normal_vector_to_path = np.cross(cartesian_start, cartesian_end)
+    normal_vector_to_path = np.cross(path_start_cartesian, path_end_cartesian)
     unit_normal_vector_to_path = normal_vector_to_path / linalg.norm(normal_vector_to_path)
 
     # Make sure we have positive rotation vector
     rotations = Rotation.from_rotvec(
         np.outer(path_components[..., 1] / EARTH_RADIUS, unit_normal_vector_to_path)
     )
-    vecs_along_path = rotations.apply(cartesian_start)
+    vecs_along_path = rotations.apply(path_start_cartesian)
 
     perpendicular_rotation_vecs = np.cross(np.atleast_2d(vecs_along_path), np.atleast_2d(unit_normal_vector_to_path))
     unit_rotation_vecs = np.einsum(
@@ -177,15 +164,9 @@ def path_component_to_standard(
 
     cartesian_components = perpendicular_rotations.apply(vecs_along_path)
 
-    if not to_spherical:
-        cartesian_components = cartesian_components / EARTH_RADIUS * \
-                               (path_components[..., 0] + EARTH_RADIUS).reshape(-1, 1)
-        return cartesian_components.reshape(path_components.shape)
-
-    spherical_components = np.atleast_2d(cartesian_to_spherical(cartesian_components))
-
-    spherical_components[..., 0] = path_components[..., 0] + EARTH_RADIUS
-    return spherical_components.reshape(path_components.shape)
+    cartesian_components = cartesian_components / linalg.norm(path_start_cartesian) * \
+        path_components[..., 0].reshape(-1, 1)
+    return cartesian_components.reshape(path_components.shape)
 
 
 def regularize_spherical_coordinates(coordinates: np.ndarray) -> np.ndarray:
