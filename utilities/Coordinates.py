@@ -6,15 +6,16 @@ import warnings
 from scipy import linalg
 import numpy as np
 from scipy.spatial.transform import Rotation
-import Vector as vector
-from typing import Optional
-from Constants import EARTH_RADIUS
+from utilities.Constants import EARTH_RADIUS
 
 
 # This takes geographic as a numpy vector of coordinates, or single coordinates
 #   (latitude: degrees, longitude: degrees, altitude: meters)
 # It returns
 #   (radius: meters, polar: radians, azimuthal: radians)
+from utilities import Vector
+
+
 def geographic_to_spherical(geographic: np.ndarray) -> np.ndarray:
     """
     Converts coordinates in (latitude, longitude) format with angles in degrees
@@ -98,20 +99,20 @@ def standard_to_path_component(
     normal_vec_to_plane = np.cross(cartesian_start, cartesian_end)
     unit_normal_vec = normal_vec_to_plane / linalg.norm(normal_vec_to_plane)
 
-    vector_normal_component = vector.row_dot_product(cartesian, unit_normal_vec)
+    vector_normal_component = Vector.row_dot_product(cartesian, unit_normal_vec)
 
     vectors_projected_onto_plane = cartesian - \
         np.outer(vector_normal_component, unit_normal_vec)
 
-    path_components[..., 1] = vector.angle_between_vector_collections(
+    path_components[..., 1] = Vector.angle_between_vector_collections(
         cartesian_start,
         vectors_projected_onto_plane
-    ) * np.sign(vector.row_dot_product(
+    ) * np.sign(Vector.row_dot_product(
         np.cross(np.atleast_2d(cartesian_start), vectors_projected_onto_plane),
         normal_vec_to_plane
     ))
 
-    path_components[..., 2] = vector.angle_between_vector_collections(
+    path_components[..., 2] = Vector.angle_between_vector_collections(
         vectors_projected_onto_plane,
         cartesian
     ) * np.sign(vector_normal_component)

@@ -1,18 +1,18 @@
 import math
 import numpy as np
 
-import Field
-import Vector
-from Atmosphere import ChapmanLayers
-from Constants import EARTH_RADIUS
-from Paths import QuasiParabolic, GreatCircleDeviation
-from Tracer import Tracer
+import magnetic_fields
+from utilities import Vector
+from atmospheres import ChapmanLayers
+from utilities.Constants import EARTH_RADIUS
+from paths import QuasiParabolic, GreatCircleDeviation
+from tracing.tracer import Tracer
 
 import matplotlib as mpl
 mpl.rcParams['figure.dpi'] = 500
 
 if __name__ == "__main__":
-    field = Field.ZeroField()
+    field = magnetic_fields.ZeroField()
     path_start_point = Vector.spherical_to_cartesian(
         Vector.latitude_to_spherical(
             np.array([EARTH_RADIUS, 90 + 23.5, 133.7])))
@@ -47,4 +47,4 @@ if __name__ == "__main__":
     basic_tracer.trace()
     basic_tracer.visualize()
 
-    basic_tracer.cleanup()  # Should call after we are done with tracer
+    basic_tracer.cleanup()  # Should call after we are done with tracer to free up processes

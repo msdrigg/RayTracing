@@ -1,143 +1,75 @@
-import copy
-from abc import ABC, abstractmethod
+from typing import Optional
 
 import numpy as np
-import typing
-from numpy.linalg import norm
-from numpy import cross, outer, zeros, \
-    linspace, concatenate, array, asarray, amax
 from numpy.typing import ArrayLike
-
-import Coordinates
-import Initialize
-import Vector
 from scipy.interpolate import UnivariateSpline
 from scipy.spatial.transform import Rotation
+from scipy import linalg
 
-from Constants import EARTH_RADIUS, TYPE_ABBREVIATION
-from matplotlib import pyplot as plt
-
-
-class Path(ABC):
-    def __init__(self):
-        self._total_angle = None
-
-    def visualize(self, fig=None, ax=None, show=True, frequency=None, color=None):
-        if fig is None or ax is None:
-            fig, ax = plt.subplots(figsize=(6, 4.5), num=0)
-        if frequency is None:
-            _frequency = "?"
-        else:
-            _frequency = int(frequency/1E6)
-        ax.set_title(f"3D Ray Trace")
-        ax.autoscale(False)
-        if color is None:
-            _color = 'black'
-        else:
-            _color = color
-        class_type = self.__class__.__name__
-        _label = f'{TYPE_ABBREVIATION[class_type]} - {_frequency} MHz'
-        angular_distance = linspace(0, 1, 100)
-        radii = np.linalg.norm(self(angular_distance), axis=-1)
-        radii = (radii - EARTH_RADIUS) / 1000
-        km_range = angular_distance * self.total_angle * EARTH_RADIUS / 1000
-        max_x = km_range[-1]
-        max_y = amax(radii)
-        plt.xlim(-max_x*.05, max_x*1.05)
-        plt.ylim(-max_y*.05, max_y*1.05)
-        ax.plot(km_range, radii, color=_color, label=_label)
-        ax.legend()
-        ax.set_ylabel("Altitude (km)")
-        ax.set_xlabel("Range (km)")
-
-        if show:
-            plt.show()
-        else:
-            return fig, ax
-
-    # noinspection PyMethodMayBeStatic
-    def transform_adjustments(self, indexes: ArrayLike, adjustments: ArrayLike) -> ArrayLike:
-        return adjustments
-
-    def adjust_parameters(self, indexes, adjustments):
-        adjusted_params = np.copy(self.adjustable_parameters)
-        broadcast_indexes, broadcast_adjustments = [
-            np.array(x) for x in np.broadcast_arrays(indexes, adjustments)
-        ]
-        indexes = asarray(indexes)
-        adjusted_params[indexes] = adjusted_params[indexes] + \
-            self.transform_adjustments(indexes, broadcast_adjustments)
-
-        # Override the behavior of the __copy__ method to change how this works
-        new_path = copy.copy(self)
-        new_path.adjustable_parameters = adjusted_params
-        return new_path
-
-    @property
-    def total_angle(self):
-        if self._total_angle is None:
-            self._total_angle = Vector.angle_between(self(0), self(1))
-        return self._total_angle
-
-    @property
-    @abstractmethod
-    def adjustable_parameters(self) -> np.ndarray:
-        raise NotImplementedError("Inheriting classes must override the adjustable_parameters property")
-
-    @adjustable_parameters.setter
-    @abstractmethod
-    def adjustable_parameters(self, value):
-        raise NotImplementedError(
-            "Inheriting classes must override the adjustable_parameters property getter and setter"
-        )
-
-    @abstractmethod
-    def __call__(self, fraction, nu=0):
-        raise NotImplementedError("Inheriting classes must override the __call__ method")
+from utilities import Vector
+from utilities import Coordinates
+from paths import quasi_parabolic_core
+from utilities.Constants import EARTH_RADIUS
+from paths import BasePath
 
 
-class QuasiParabolic(Path):
-    # Currently, must initialize with a cartesian vector
-    # This class needs less optimization because its just a starting point.
+class QuasiParabolic(BasePath):
+    """
+    implementation of the BasePath to follow QuasiParabolic model
+    """
     def __init__(
-            self, initial_coordinates: ArrayLike,
-            final_coordinates: ArrayLike,
+            self, initial_coordinate: ArrayLike,
+            final_coordinate: ArrayLike,
             atmosphere_params: ArrayLike,
-            wave_frequency: float,
-            degree: typing.Optional[int] = 4,
-            point_number: typing.Optional[int] = None,
-            use_high_ray: typing.Optional[bool] = True,
+            operating_frequency: float,
+            point_number: Optional[int] = None,
+            use_high_ray: Optional[bool] = True,
     ):
+        """
+        supply initial and final points, atmosphere parameters (f_0, r_m, y_m) and operating_frequency (f)
+
+        :param initial_coordinate : array_like, shape (3,)
+            the cartesian coordinates of the path start
+        :param final_coordinate : array_like, shape (3,)
+            the cartesian coordinates of the path end
+        :param atmosphere_params : Tuple, shape (3,)
+            the atmosphere parameters as a tuple of
+            (max_plasma_frequency (f_0), height_of_max_plasma_frequency(r_m), layer_semi_width(y_m))
+        :param operating_frequency: float
+            The operating frequency of the ray
+        :param point_number : int
+            The number of points to interpolate between in the final path
+        :param use_high_ray : bool
+            Whether or not to use high ray
+        """
         super().__init__()
 
         # Initial and final points are normalized, but poly_fit(0) and poly_fit(1) will return the radial component
         # for the initial and final point
-        initial_rad, final_rad = norm(initial_coordinates), norm(final_coordinates)
-        self.initial_point = initial_coordinates/norm(initial_coordinates)
-        self.final_point = final_coordinates/norm(final_coordinates)
+        initial_rad, final_rad = linalg.norm(initial_coordinate), linalg.norm(final_coordinate)
+        self.initial_point = initial_coordinate / linalg.norm(initial_coordinate)
+        self.final_point = final_coordinate / linalg.norm(final_coordinate)
 
-        self.degree = degree
+        self.normal_vec = np.cross(self.initial_point, self.final_point)
+        self.normal_vec = self.normal_vec / linalg.norm(self.normal_vec)
 
-        self.normal_vec = cross(self.initial_point, self.final_point)
-        self.normal_vec = self.normal_vec/norm(self.normal_vec)
-
-        angle_between = Vector.angle_between(initial_coordinates, final_coordinates)
+        angle_between = Vector.angle_between(initial_coordinate, final_coordinate)
 
         # Parameters for quasi-parabolic path only depend on atmospheric model and ignore magnetic field
 
-        self._parameters = self.calculate_parameters(atmosphere_params, wave_frequency)
+        self._parameters = self.calculate_parameters(atmosphere_params, operating_frequency)
         # Point number is the number of points to calculate. All points in between are interpolated from PC spline
         if point_number is not None:
             self.point_number = point_number
         else:
-            self.point_number = int(angle_between*EARTH_RADIUS)
+            self.point_number = int(angle_between * EARTH_RADIUS)
 
         # Each point is evenly spaced along the great circle path connecting initial and final coordinates
         # Each point is a 2-vector holding its angular value in radians (along great circle path)
         # and its radial value at each point (in km)
-        self.points = zeros((self.point_number, 2))
-        self.points[:, 0] = linspace(0, angle_between, self.point_number)
-        self.points[:, 1] = linspace(initial_rad, final_rad, self.point_number)
+        self.points = np.zeros((self.point_number, 2))
+        self.points[:, 0] = np.linspace(0, angle_between, self.point_number)
+        self.points[:, 1] = np.linspace(initial_rad, final_rad, self.point_number)
 
         # Real representation of the line will be a poly fit of radius vs angle along great circle
         self._poly_fit = None
@@ -146,7 +78,7 @@ class QuasiParabolic(Path):
 
     @property
     def adjustable_parameters(self):
-        # Parameters are the parameters defining the parabolic atmosphere 
+        # Parameters are the parameters defining the parabolic atmosphere
         # Examples are upper and lower radius, midpoint, maximum, etc.
         return self._parameters
 
@@ -158,14 +90,14 @@ class QuasiParabolic(Path):
     def __call__(self, fraction, **kwargs):
         # Nu is not allowed as a parameter
         if "nu" in kwargs and kwargs.get("nu") != 0:
-            raise(NotImplementedError("Quasi-parabolic class does not have derivative capabilities."))
+            raise (NotImplementedError("Quasi-parabolic class does not have derivative capabilities."))
         if self._poly_fit is None:
             self.compile_points()
-        alpha = fraction*self.points[-1, 0]
+        alpha = fraction * self.points[-1, 0]
 
-        rotations = Rotation.from_rotvec(outer(alpha, self.normal_vec))
+        rotations = Rotation.from_rotvec(np.outer(alpha, self.normal_vec))
         rotated_vecs = rotations.apply(self.initial_point)
-        output_vecs = rotated_vecs*self._poly_fit(alpha).reshape(-1, 1)
+        output_vecs = rotated_vecs * self._poly_fit(alpha).reshape(-1, 1)
         if np.isscalar(fraction):
             return output_vecs[0]
         else:
@@ -175,10 +107,10 @@ class QuasiParabolic(Path):
         fc, rm, rb, ym, f = self._parameters
         total_angle = Vector.angle_between(self.initial_point, self.final_point)
 
-        points_unprocessed = Initialize.get_quasi_parabolic_path(
-            total_angle * EARTH_RADIUS, f, rm + EARTH_RADIUS, ym, fc**2
+        points_unprocessed = quasi_parabolic_core.get_quasi_parabolic_path(
+            total_angle * EARTH_RADIUS, f, rm + EARTH_RADIUS, ym, fc ** 2
         )
-        if self.using_high_ray:
+        if self.using_high_ray or len(points_unprocessed) == 1:
             points_unprocessed = points_unprocessed[0]
         else:
             points_unprocessed = points_unprocessed[1]
@@ -186,12 +118,12 @@ class QuasiParabolic(Path):
         points_unprocessed[:, 1] = points_unprocessed[:, 1]
         points_unprocessed[:, 0] = points_unprocessed[:, 0] / EARTH_RADIUS
         self.points = points_unprocessed
-        
+
         self._total_angle = total_angle
 
         self._poly_fit = UnivariateSpline(
             points_unprocessed[:, 0], points_unprocessed[:, 1],
-            k=self.degree, s=0, ext=0
+            k=3, s=0, ext=0
         )
 
     @property
@@ -206,7 +138,7 @@ class QuasiParabolic(Path):
         rm = atmosphere_params[1]
         ym = atmosphere_params[2]
         rb = rm - ym
-        return array([f_max, rm, rb, ym, wave_frequency])
+        return np.array([f_max, rm, rb, ym, wave_frequency])
 
     def __copy__(self):
         atmosphere_params = self._parameters[
@@ -216,13 +148,15 @@ class QuasiParabolic(Path):
             self.initial_point, self.final_point,
             atmosphere_params,
             self._parameters[4],
-            degree=self.degree,
             point_number=self.point_number,
             use_high_ray=self.using_high_ray
         )
 
 
-class GreatCircleDeviation(Path):
+class GreatCircleDeviation(BasePath):
+    """
+    implementation of BasePath reflecting the GCD path
+    """
     def __init__(
             self,
             radial_parameters: ArrayLike,
@@ -230,6 +164,25 @@ class GreatCircleDeviation(Path):
             initial_point: ArrayLike,
             final_point: ArrayLike
     ):
+        """
+        supply the radial_parameters as a array of (fractional_position, radial_distance) and angular_parameters
+        as an array of (fractional_position, angular_deviation), initial_point in cartesian and final_point in
+        cartesian.
+
+        Note: radial_parameters needs to have a value at 0 and at 1 (endpoints of our interval), but these values
+        will be fixed and won't be included in our adjustable_parameters function because these don't get optimized.
+
+        :param radial_parameters : array_like, shape (N,2)
+            each row of this vector is of the format
+            (fractional amount along path from 0 to 1, height (including earth's radius) at this path point)
+            these are interpolated between to get path
+        :param angular_parameters : array_like, shape (N,2)
+            same format as radial_parameters, but parameter values are in radians
+        :param initial_point : array_like, shape (3,)
+            the cartesian coordinates of the path start
+        :param final_point : array_like, shape (3,)
+            the cartesian coordinates of the path end
+        """
         super().__init__()
 
         # Set the position of all parameters by concatenating the lists of radial deviations and angular deviations
@@ -246,7 +199,7 @@ class GreatCircleDeviation(Path):
 
         # Get vector normal to path
         self.normal_vec = Vector.unit_vector(
-            cross(self.initial_point, self.final_point)
+            np.cross(self.initial_point, self.final_point)
         )
 
         # Declare other private variables
@@ -260,8 +213,18 @@ class GreatCircleDeviation(Path):
     def from_path(
             radial_parameter_locations: ArrayLike,
             angular_parameter_locations: ArrayLike,
-            other_path: Path
+            other_path: BasePath
     ):
+        """
+        helper function to create GCD path given another path and interpolation points.
+
+        :param radial_parameter_locations : array_like, shape (N,)
+            Similar format as radial_parameters in the __init__ function, but not including values, only path points
+        :param angular_parameter_locations : array_like, shape (N,)
+            Similar format as angular_parameters in the __init__ function, but not including values, only path points
+        :param other_path : BasePath
+            This is the function that will be used to determine the path location.
+        """
         # Take initial and final points from the path
         initial_point = other_path(0)
         final_point = other_path(1)
@@ -294,9 +257,10 @@ class GreatCircleDeviation(Path):
     @property
     def adjustable_parameters(self):
         # We don't vary the first or last parameters (these are the fixed points on the path).
-        return concatenate((self._radial_parameters[1:-1, 1], self._angular_parameters[1:-1, 1]))
+        return np.concatenate((self._radial_parameters[1:-1, 1], self._angular_parameters[1:-1, 1]))
 
     def transform_adjustments(self, indexes: ArrayLike, adjustments: ArrayLike) -> ArrayLike:
+        # convert adjustments in angle into radians
         adjustments[indexes >= self._radial_parameters.shape[0] - 2] = \
             adjustments[indexes >= self._radial_parameters.shape[0] - 2] / EARTH_RADIUS
         return adjustments
@@ -322,7 +286,7 @@ class GreatCircleDeviation(Path):
 
     def __call__(self, fraction, nu=0):
         _ = self.poly_fit_cartesian
-        point = array(list(map(lambda poly_fit: poly_fit(fraction, nu=nu), self._poly_fit_cartesian))).T
+        point = np.array(list(map(lambda poly_fit: poly_fit(fraction, nu=nu), self._poly_fit_cartesian))).T
 
         if np.isscalar(fraction):
             return point.flatten()
@@ -366,12 +330,12 @@ class GreatCircleDeviation(Path):
                 ext=0
             )
         else:
-            cartesian_points = zeros((len(self._radial_parameters), 3))
+            cartesian_points = np.zeros((len(self._radial_parameters), 3))
             for index in range(len(self._radial_parameters)):
                 alpha = self._radial_parameters[index, 0]
                 r_1 = Rotation.from_rotvec(self.normal_vec * alpha * self.total_angle)
                 v_1 = r_1.apply(Vector.unit_vector(self.initial_point))
-                rotation_vec_2 = Vector.unit_vector(cross(self.normal_vec, v_1))
+                rotation_vec_2 = Vector.unit_vector(np.cross(self.normal_vec, v_1))
                 rotation_vec_2 *= self._poly_fit_angular(alpha)
                 r_2 = Rotation.from_rotvec(rotation_vec_2)
                 v_2 = r_2.apply(v_1)

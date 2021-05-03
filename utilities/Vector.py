@@ -1,6 +1,6 @@
 from numpy.linalg import norm
 from numpy import cos, arccos, sin, arctan2, vstack, clip, sum
-from Constants import PI
+from utilities.Constants import PI
 import numpy as np
 import warnings
 
@@ -39,14 +39,10 @@ def unit_vector(vector):
         return output
 
 
-def angle_between(s1, s2, use_spherical=False):
+def angle_between(s1, s2):
     """ Returns the angle in radians between vectors 'v1' and 'v2'::
     """
-    if use_spherical:
-        v1, v2 = spherical_to_cartesian(s1), spherical_to_cartesian(s2)
-    else:
-        v1, v2 = s1, s2
-    v1_u, v2_u = unit_vector(v1), unit_vector(v2)
+    v1_u, v2_u = unit_vector(s1), unit_vector(s2)
     output = arccos(clip(sum(v1_u.reshape((-1, 3))*v2_u.reshape((-1, 3)), axis=1), -1.0, 1.0))
     if len(output) == 1:
         return output[0]
