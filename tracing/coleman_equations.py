@@ -12,14 +12,13 @@ from scipy import optimize
 epsilon = np.finfo(float).eps * 10
 
 
-def equation_13_new(yp, *args):
-    yp2 = np.square(yp)
-    x, y_squared, yt, sign = args
+def equation_13(yp, x, y_squared, yt, sign=1):
+    yp_squared = np.square(yp)
 
-    fractions = equation_16(yp, yp2, x, y_squared)
-    pt = equation_14(yp, yp2, y_squared, fractions, yt, sign=sign)
+    fractions = equation_16(yp, yp_squared, x, y_squared)
+    pt = equation_14(yp, yp_squared, y_squared, x, yt, sign=sign)
 
-    output = -1 + pt * (pt - yt * (1 - pt) * fractions * 0.5)
+    output = -1 + pt * (pt - (yt - yp*pt) * fractions * 0.5)
     return output
 
 
@@ -39,44 +38,58 @@ def equation_14(
     fractions = np.zeros_like(yp)
     defined_mask = y_squared > epsilon
     if not np.any(defined_mask):
-        return np.ones_like(yp)
-
-    fractions[defined_mask] = equation_16(
-        yp[defined_mask],
-        yp_squared[defined_mask],
-        x[defined_mask],
-        y_squared[defined_mask],
-        sign=sign
-    )
-    output = np.ones_like(yp)
-    output[defined_mask] = yt[defined_mask] / (
-            yp[defined_mask] -
-            (y_squared[defined_mask] - yp_squared[defined_mask]) *
-            fractions[defined_mask] * 0.5
-    )
+        output = np.ones_like(yp)
+    else:
+        fractions[defined_mask] = equation_16(
+            yp[defined_mask],
+            yp_squared[defined_mask],
+            x[defined_mask],
+            y_squared[defined_mask],
+            sign=sign
+        )
+        output = np.ones_like(yp)
+        output[defined_mask] = yt[defined_mask] / (
+                yp[defined_mask] -
+                (y_squared[defined_mask] - yp_squared[defined_mask]) *
+                fractions[defined_mask] * 0.5
+        )
     if np.isscalar(yp):
         return output.item()
     else:
         return output
 
 
-def equation_15(yp, x, y2, sign=1):
-    # We choose ordinary ray in our calculation of mu2
-    yp2 = np.square(yp)
+def equation_15(yp_in, x_in, y_squared_in, sign=1):
+    yp = np.asarray(yp_in)
+    y_squared = np.asarray(y_squared_in)
+    x = np.asarray(x_in)
+    yp_squared = np.square(yp)
 
-    return 1 - 2 * x * (1 - x) / (
-            2 * (1 - x) - (y2 - yp2) + sign *
-            np.sqrt(np.square(y2 - yp2) + 4 * np.square(1 - x) * yp2)
+    defined_mask = np.abs(x - 1) > epsilon
+
+    if sign == 1:
+        output = np.zeros_like(yp)
+    else:
+        output = np.ones_like(yp)
+    output[defined_mask] = 1 - 2 * x[defined_mask] * (1 - x[defined_mask]) / (
+            2 * (1 - x[defined_mask]) - (y_squared[defined_mask] - yp_squared[defined_mask]) +
+            sign * np.sqrt(np.square(y_squared[defined_mask] - yp_squared[defined_mask]) +
+                           4 * np.square(1 - x[defined_mask]) * yp_squared[defined_mask])
     )
 
+    if np.isscalar(yp_in):
+        return output.item()
+    else:
+        return output
 
-def equation_16(yp, yp2, x, y2, sign=1):
-    a = 1 - x - y2 + x * yp2
+
+def equation_16(yp, yp_squared, x, y_squared, sign=1):
+    a = 1 - x - y_squared + x * yp_squared
     beta = 2 * (1 - x) / (
-            2 * (1 - x) - (y2 - yp2) + sign *
-            np.sqrt(np.square((y2 - yp2)) + 4 * np.square(1 - x) * yp2)
+            2 * (1 - x) - (y_squared - yp_squared) + sign *
+            np.sqrt(np.square((y_squared - yp_squared)) + 4 * np.square(1 - x) * yp_squared)
     )
-    return x * yp * beta / (1 + 0.5 * (yp2 - y2) - a * beta - x)
+    return x * yp * beta / (1 + 0.5 * (yp_squared - y_squared) - a * beta - x)
 
 
 def calculate_yp_pt_cheating(yt: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -109,7 +122,7 @@ def calculate_yp(
     Given the parameters, return the solution to yp
     :return: yp solved
     """
-    if isinstance(x, float):
+    if np.isscalar(x):
         return calculate_yp_float(x, y, y_squared, yt)
     else:
         outputs = y.copy()
@@ -127,18 +140,30 @@ def calculate_yp_float(
 ) -> float:
     if y_squared < epsilon:
         return 0
+    if abs(x - 1) < epsilon:
+        return 1
+    if x > 1:
+        warnings.warn(
+            f"Cannot solve for yp when x > 1, and x={x}."
+            "We will assume yp = 1"
+        )
+        return 1
+    if abs(yt) < epsilon:
+        return 0
 
     function_args = x, y_squared, yt, sign
 
     # noinspection PyTypeChecker
     yp_solved, details = optimize.brentq(
-        equation_13_new, -y - epsilon, y + epsilon,
+        equation_13, epsilon, y,
         args=function_args, xtol=1E-15, rtol=1E-15, full_output=True
     )
     if not details.converged:
         warnings.warn(
             f"Error solving for yp using equation 13. Attempted {details.iterations} iterations "
             f"and resulted in {details.root}, "
-            f"stopping with reason: {details.flag}."
+            f"stopping with reason: {details.flag}. "
+            f"Returning yp = {yt} as a good guess."
         )
-    return yp_solved
+        return yt
+    return yp_solved * np.sign(yt)

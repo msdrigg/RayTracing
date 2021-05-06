@@ -1,4 +1,6 @@
 import multiprocessing as mp
+import random
+import time
 import warnings
 from os.path import join as join_path
 from typing import Optional
@@ -245,7 +247,8 @@ class Tracer:
         # noinspection PyProtectedMember
         print(
             f"Calculating {total_diagonal_ints + off_diagonal_elements * 4} integrations "
-            f"with {self.pool._processes} processes ")
+            f"with {self.pool._processes} processes "
+        )
         for result in diagonal_d_results.get():
             index = int(result[0])
             gradient[index] = result[1]
@@ -328,9 +331,9 @@ def integrate_parameter(
     x = np.square(system_state.atmosphere.plasma_frequency(r) / system_state.operating_frequency)
     yt = Vector.row_dot_product(y_vec, t)
 
-    sign = -1
+    sign = 1
     if system_state.is_extraordinary_ray:
-        sign = 1
+        sign = -1
 
     # TODO: Fix real yp/pt solver
     if use_cheater_solver:
@@ -339,10 +342,14 @@ def integrate_parameter(
         solved_yp, solved_pt = calculate_yp_pt_real(
             x, y, y_squared, yt, sign=sign
         )
+    # plt.plot(solved_yp)
+    # plt.plot(solved_pt)
+    # plt.show()
+    # plt.close()
 
-    current_mu2 = equation_15(solved_yp, x, y_squared, sign=sign)
+    current_mu_squared = equation_15(solved_yp, x, y_squared, sign=sign)
 
-    dp_array = np.sqrt(current_mu2) * solved_pt * r_dot_norm
+    dp_array = np.sqrt(current_mu_squared) * solved_pt * r_dot_norm
     integration = simps(dp_array, dx=h)
     if show:
         fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))

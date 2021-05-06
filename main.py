@@ -12,7 +12,7 @@ import matplotlib as mpl
 mpl.rcParams['figure.dpi'] = 500
 
 if __name__ == "__main__":
-    field = magnetic_fields.ZeroField()
+    field = magnetic_fields.DipoleField()
     path_start_point = Vector.spherical_to_cartesian(
         Vector.latitude_to_spherical(
             np.array([EARTH_RADIUS, 90 + 23.5, 133.7])))
@@ -36,7 +36,9 @@ if __name__ == "__main__":
     path_start = GreatCircleDeviation.from_path(np.linspace(0, 1, 52), np.linspace(0, 1, 2), other_path=path_generator)
     basic_tracer = Tracer(operating_frequency, atmosphere, field, path_start)
 
-    basic_tracer.trace()
+    basic_tracer.trace(use_cheater_solver=False)
+    basic_tracer.visualize(show_history=True)
+    basic_tracer.trace(use_cheater_solver=True, is_extraordinary_ray=True)
     basic_tracer.visualize(show_history=True)
 
     path_generator.using_high_ray = False
@@ -44,7 +46,10 @@ if __name__ == "__main__":
     basic_tracer.replace_path(GreatCircleDeviation.from_path(
         np.linspace(0, 1, 52), np.linspace(0, 1, 2), path_generator
     ))
-    basic_tracer.trace()
-    basic_tracer.visualize()
+
+    basic_tracer.trace(use_cheater_solver=False)
+    basic_tracer.visualize(show_history=True)
+    basic_tracer.trace(use_cheater_solver=True, is_extraordinary_ray=True)
+    basic_tracer.visualize(show_history=True)
 
     basic_tracer.cleanup()  # Should call after we are done with tracer to free up processes
