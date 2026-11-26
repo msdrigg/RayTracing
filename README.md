@@ -35,14 +35,56 @@ To set up this repository, perform the following steps
 
 ## Entrypoint
 
-[main.py](main.py) is a file contains that a working example of how 
-to initialize a `Tracer` object and trace 
-different rays within an atmosphere-magnetic field 
+[main.py](main.py) is a working example of how to initialize a `Tracer` object and trace
+the high and low, ordinary and extraordinary rays within an atmosphere-magnetic field
 system.
 
-To execute this file, run `python3 main.py` with no 
-arguments. This file will run the code and generate 
-figures showing the convergence.
+    python3 main.py                 # show the figures
+    python3 main.py --save plots    # write the figures to ./plots instead
+    python3 main.py --gradient 0.375 --no-field
+
+Each ray takes a few tenths of a second.
+
+## Checking the results
+
+* `python3 -m pytest tests` runs the checks of the physics and of the solver.
+* [validation/haselgrove.py](validation/haselgrove.py) is an independent, conventional
+  (Haselgrove equation) ray tracer with homing. It shares no code with the variational
+  solver and is used to check its answers.
+* `python3 benchmarks/coleman_tables.py` repeats the experiments of Tables 1 and 2 of
+  Coleman's paper: a ray is traced with the Haselgrove equations and the direct method is
+  then asked for the ray between the same end points with 24 to 200 segments. Phase path,
+  apogee and lateral deviation agree to within meters.
+
+## How it works
+
+The phase path of a trial path is `P = integral of mu * pt ds` where `mu` is the
+Appleton-Hartree refractive index and `pt` the cosine of the angle between the ray and the
+wave normal. Both depend on the direction of the wave normal, which is found at every point
+of the path from Coleman's equations 13 and 14
+(see [tracing/coleman_equations.py](tracing/coleman_equations.py) for how these are reduced
+to a single equation that always has a bracketed root). A ray is a path that makes `P`
+stationary, which is found by Newton-Raphson iteration on the path parameters starting from
+the analytic ray in a quasi-parabolic layer.
+
+The gradient and Hessian of `P` are assembled with the chain rule from derivatives of the
+integrand at each quadrature point (see [tracing/tracer.py](tracing/tracer.py)), so a Newton
+step costs 73 vectorized evaluations of the integrand no matter how many parameters the
+path has.
+
+Things to know:
+
+* Coleman's Figure 2 uses an IRI90 based ionosphere at 16 MHz and can't be reproduced with
+  the simple layers here. The Chapman layer with gradients (foF2 = 7 MHz, hmF2 = 350 km,
+  ymF2 = 100 km, 0.375 MHz per degree, 10 MHz) is the one behind his Tables 1 to 3.
+* The paper doesn't state its exact Chapman formula, where the gradient is anchored or its
+  magnetic field model, so absolute numbers differ from its tables by a few percent. See
+  the `profile_exponent` argument of `ChapmanLayers`.
+* If no ray of the requested type exists near the starting path (for example a high ray
+  when the ionosphere becomes too dense along the path), `Tracer.trace` warns and
+  `Tracer.converged` is False. The last path is then not a ray.
+* Layers with kinks (the quasi-parabolic layer) converge slowly with the number of
+  segments. Smooth layers converge to meters with 24 to 50 segments.
 
 ## Standardized Components
 Atmospheres, Magnetic Fields, and Paths are all standardized

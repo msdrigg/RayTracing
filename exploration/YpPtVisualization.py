@@ -6,16 +6,20 @@ import numpy as np
 from matplotlib.widgets import Slider, Button, CheckButtons
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tracing.coleman_equations import equation_13, equation_14, equation_15
+from tracing.coleman_equations import equation_14, equation_15, pt_from_yp
 
 
 def equation_13_14_15(x, y, y_dot_p_normalized, y_dot_t_normalized, sign):
+    """
+    For a range of trial values of Yp: the residual of eq. 14 (zero at the solution),
+    the corresponding pt, and mu^2
+    """
     x, y_squared, yt = x, np.square(y), y_dot_t_normalized * y
     yp = y_dot_p_normalized * y
-    result_13 = equation_13(yp, x, y_squared, yt, sign)
-    result_14 = equation_14(yp, np.square(yp), y_squared, x, yt, sign)
+    residual = equation_14(yp, x, y_squared, sign) - yt
+    result_pt = pt_from_yp(yp, x, y_squared, sign)
     result_15 = equation_15(yp, x, y_squared, sign)
-    return result_13, result_14, result_15
+    return residual, result_pt, result_15
 
 
 y_dot_p_normalized_external = np.linspace(-1, 1, 1000)
@@ -33,7 +37,7 @@ line_yp, = plt.plot(
     y_dot_p_normalized_external,
     yp_minimizer,
     color="red",
-    lw=2, label="Minimizer"
+    lw=2, label="Eq. 14 residual (root = solution)"
 )
 line_pt, = plt.plot(
     y_dot_p_normalized_external,

@@ -2,7 +2,7 @@ from typing import Optional
 
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.interpolate import UnivariateSpline
+from scipy.interpolate import UnivariateSpline, make_interp_spline
 from scipy.spatial.transform import Rotation
 from scipy import linalg
 
@@ -76,6 +76,9 @@ class QuasiParabolic(BasePath):
         self._total_angle = None
         self.using_high_ray = use_high_ray
 
+        # Spacing (meters of ground range) of the points the analytic path is sampled at
+        self.step_size_horizontal = 500.0
+
     @property
     def adjustable_parameters(self):
         # Parameters are the parameters defining the parabolic atmosphere
@@ -108,7 +111,8 @@ class QuasiParabolic(BasePath):
         total_angle = Vector.angle_between(self.initial_point, self.final_point)
 
         points_unprocessed = quasi_parabolic_core.get_quasi_parabolic_path(
-            total_angle * EARTH_RADIUS, f, rm + EARTH_RADIUS, ym, fc ** 2
+            total_angle * EARTH_RADIUS, f, rm + EARTH_RADIUS, ym, fc ** 2,
+            step_size_horizontal=self.step_size_horizontal
         )
         if self.using_high_ray or len(points_unprocessed) == 1:
             points_unprocessed = points_unprocessed[0]
@@ -155,8 +159,22 @@ class QuasiParabolic(BasePath):
 
 class GreatCircleDeviation(BasePath):
     """
-    implementation of BasePath reflecting the GCD path
+    implementation of BasePath reflecting the GCD path.
+
+    With u(s) the unit vector that sweeps along the great circle from the start
+    point (s = 0) to the end point (s = 1) and n the unit normal of the great
+    circle plane, the path is
+
+        r(s) = R(s) * u(s) + b(s) * n
+
+    R(s) is a cubic spline through the radial parameters (meters from the
+    earth's centre) and b(s) a cubic spline through the lateral parameters
+    (meters of deviation out of the great circle plane). Both splines are
+    linear in their knot values, so r(s) is LINEAR in the adjustable
+    parameters. The tracer relies on this to build an exact Hessian.
     """
+    is_linear_in_parameters = True
+
     def __init__(
             self,
             radial_parameters: ArrayLike,
@@ -166,18 +184,19 @@ class GreatCircleDeviation(BasePath):
     ):
         """
         supply the radial_parameters as a array of (fractional_position, radial_distance) and angular_parameters
-        as an array of (fractional_position, angular_deviation), initial_point in cartesian and final_point in
+        as an array of (fractional_position, lateral_deviation), initial_point in cartesian and final_point in
         cartesian.
 
-        Note: radial_parameters needs to have a value at 0 and at 1 (endpoints of our interval), but these values
-        will be fixed and won't be included in our adjustable_parameters function because these don't get optimized.
+        Note: both parameter arrays need to have a value at 0 and at 1 (endpoints of our interval), but these values
+        are fixed and aren't included in adjustable_parameters because they don't get optimized.
 
         :param radial_parameters : array_like, shape (N,2)
             each row of this vector is of the format
-            (fractional amount along path from 0 to 1, height (including earth's radius) at this path point)
+            (fractional amount along path from 0 to 1, distance from the earth's centre at this path point in meters)
             these are interpolated between to get path
-        :param angular_parameters : array_like, shape (N,2)
-            same format as radial_parameters, but parameter values are in radians
+        :param angular_parameters : array_like, shape (M,2)
+            same format as radial_parameters, but parameter values are the lateral deviation from
+            the great circle plane in meters (positive along cross(initial_point, final_point))
         :param initial_point : array_like, shape (3,)
             the cartesian coordinates of the path start
         :param final_point : array_like, shape (3,)
@@ -185,29 +204,26 @@ class GreatCircleDeviation(BasePath):
         """
         super().__init__()
 
-        # Set the position of all parameters by concatenating the lists of radial deviations and angular deviations
-        # Position is the angular location along the great circle connecting initial and final points
-
         # Each parameter is represented by a 2-vector: (position, value)
         # The the start and end points are fixed
-        self._radial_parameters = np.copy(radial_parameters)
-        self._angular_parameters = np.copy(angular_parameters)
+        self._radial_parameters = np.array(radial_parameters, dtype=float)
+        self._angular_parameters = np.array(angular_parameters, dtype=float)
 
         # Get the initial and final points from the initializer state
-        self.initial_point = np.copy(initial_point)
-        self.final_point = np.copy(final_point)
+        self.initial_point = np.array(initial_point, dtype=float)
+        self.final_point = np.array(final_point, dtype=float)
 
-        # Get vector normal to path
+        # Orthonormal frame of the great circle plane
+        self._e1 = Vector.unit_vector(self.initial_point)
         self.normal_vec = Vector.unit_vector(
             np.cross(self.initial_point, self.final_point)
         )
-
-        # Declare other private variables
-        self._total_angle = None
+        self._e2 = np.cross(self.normal_vec, self._e1)
+        self._total_angle = Vector.angle_between(self.initial_point, self.final_point)
 
         self._poly_fit_angular = None
         self._poly_fit_radial = None
-        self._poly_fit_cartesian = None
+        self._basis_cache = None
 
     @staticmethod
     def from_path(
@@ -225,26 +241,29 @@ class GreatCircleDeviation(BasePath):
         :param other_path : BasePath
             This is the function that will be used to determine the path location.
         """
+        radial_parameter_locations = np.asarray(radial_parameter_locations, dtype=float)
+        angular_parameter_locations = np.asarray(angular_parameter_locations, dtype=float)
+
         # Take initial and final points from the path
         initial_point = other_path(0)
         final_point = other_path(1)
+        normal_vec = Vector.unit_vector(np.cross(initial_point, final_point))
 
-        # Take radial parameters from the norm of the positions along the path
-        radial_parameter_path_components = Coordinates.standard_to_path_component(
-            other_path(radial_parameter_locations), initial_point, final_point
-        )
+        # In-plane distance from the earth's centre at the radial locations
+        radial_points = other_path(radial_parameter_locations)
+        in_plane = radial_points - np.outer(radial_points @ normal_vec, normal_vec)
         radial_params = np.column_stack([
             radial_parameter_locations,
-            radial_parameter_path_components[:, 0]
+            linalg.norm(in_plane, axis=-1)
         ])
 
-        angular_parameter_path_components = Coordinates.standard_to_path_component(
-            other_path(angular_parameter_locations), initial_point, final_point
-        )
+        # Out of plane distance at the lateral locations
         angular_params = np.column_stack([
             angular_parameter_locations,
-            angular_parameter_path_components[:, 2]
+            other_path(angular_parameter_locations) @ normal_vec
         ])
+        # The end points are in the plane by definition
+        angular_params[[0, -1], 1] = 0
 
         return GreatCircleDeviation(
             radial_params, angular_params, initial_point, final_point
@@ -255,15 +274,23 @@ class GreatCircleDeviation(BasePath):
         return self._radial_parameters
 
     @property
+    def lateral_points(self):
+        return self._angular_parameters
+
+    @property
+    def radial_parameter_number(self):
+        return self._radial_parameters.shape[0] - 2
+
+    @property
+    def quadrature_breakpoints(self):
+        # The path is a piecewise polynomial between the radial knots, so those are
+        # the natural panel boundaries for integrating along it
+        return self._radial_parameters[:, 0]
+
+    @property
     def adjustable_parameters(self):
         # We don't vary the first or last parameters (these are the fixed points on the path).
         return np.concatenate((self._radial_parameters[1:-1, 1], self._angular_parameters[1:-1, 1]))
-
-    def transform_adjustments(self, indexes: ArrayLike, adjustments: ArrayLike) -> ArrayLike:
-        # convert adjustments in angle into radians
-        adjustments[indexes >= self._radial_parameters.shape[0] - 2] = \
-            adjustments[indexes >= self._radial_parameters.shape[0] - 2] / EARTH_RADIUS
-        return adjustments
 
     @adjustable_parameters.setter
     def adjustable_parameters(self, value):
@@ -272,82 +299,92 @@ class GreatCircleDeviation(BasePath):
         )
         self._radial_parameters[1:-1, 1] = new_radial_parameters
         self._angular_parameters[1:-1, 1] = new_angular_parameters
-
-        # Redefine the poly_fits that control this method
-        self.interpolate_params()
+        self._poly_fit_radial = None
+        self._poly_fit_angular = None
 
     def __copy__(self):
-        return GreatCircleDeviation(
+        new_path = GreatCircleDeviation(
             self._radial_parameters,
             self._angular_parameters,
             self.initial_point,
             self.final_point
         )
+        # The basis functions only depend on the knot locations, which copies share
+        new_path._basis_cache = self._basis_cache
+        return new_path
 
-    def __call__(self, fraction, nu=0):
-        _ = self.poly_fit_cartesian
-        point = np.array(list(map(lambda poly_fit: poly_fit(fraction, nu=nu), self._poly_fit_cartesian))).T
-
-        if np.isscalar(fraction):
-            return point.flatten()
-        else:
-            return point
-
-    @property
-    def poly_fit_angular(self):
-        if self._poly_fit_angular is None:
-            self.interpolate_params()
-        return self._poly_fit_angular
+    @staticmethod
+    def _spline(parameters: np.ndarray, values: np.ndarray):
+        return make_interp_spline(parameters[:, 0], values, k=min(3, len(parameters) - 1))
 
     @property
     def poly_fit_radial(self):
         if self._poly_fit_radial is None:
-            self.interpolate_params(radial=True)
+            self._poly_fit_radial = self._spline(self._radial_parameters, self._radial_parameters[:, 1])
         return self._poly_fit_radial
 
     @property
-    def poly_fit_cartesian(self):
-        if self._poly_fit_cartesian is None:
-            self.interpolate_params()
-        return self._poly_fit_cartesian
+    def poly_fit_angular(self):
+        if self._poly_fit_angular is None:
+            self._poly_fit_angular = self._spline(self._angular_parameters, self._angular_parameters[:, 1])
+        return self._poly_fit_angular
 
-    def interpolate_params(self, radial=False, degree=3):
-        self._total_angle = Vector.angle_between(self.initial_point, self.final_point)
+    def _great_circle_frame(self, fraction: np.ndarray):
+        """u(s) and its first two derivatives with respect to s, each of shape (N, 3)"""
+        angle = fraction * self._total_angle
+        cos, sin = np.cos(angle)[:, np.newaxis], np.sin(angle)[:, np.newaxis]
+        u = cos * self._e1 + sin * self._e2
+        du = self._total_angle * (-sin * self._e1 + cos * self._e2)
+        ddu = -self._total_angle ** 2 * u
+        return u, du, ddu
 
-        self._poly_fit_angular = UnivariateSpline(
-            self._angular_parameters[:, 0],
-            self._angular_parameters[:, 1],
-            k=min(degree, len(self._angular_parameters) - 1),
-            s=0,
-            ext=0
-        )
-        if radial:
-            self._poly_fit_radial = UnivariateSpline(
-                self._radial_parameters[:, 0],
-                self._radial_parameters[:, 1],
-                k=degree,
-                s=0,
-                ext=0
-            )
+    def __call__(self, fraction, nu=0):
+        scalar_input = np.isscalar(fraction)
+        fraction = np.atleast_1d(np.asarray(fraction, dtype=float))
+        u, du, ddu = self._great_circle_frame(fraction)
+        radial, lateral = self.poly_fit_radial, self.poly_fit_angular
+
+        if nu == 0:
+            point = radial(fraction)[:, np.newaxis] * u
+        elif nu == 1:
+            point = radial(fraction, 1)[:, np.newaxis] * u + radial(fraction)[:, np.newaxis] * du
+        elif nu == 2:
+            point = radial(fraction, 2)[:, np.newaxis] * u + 2 * radial(fraction, 1)[:, np.newaxis] * du + \
+                radial(fraction)[:, np.newaxis] * ddu
         else:
-            cartesian_points = np.zeros((len(self._radial_parameters), 3))
-            for index in range(len(self._radial_parameters)):
-                alpha = self._radial_parameters[index, 0]
-                r_1 = Rotation.from_rotvec(self.normal_vec * alpha * self.total_angle)
-                v_1 = r_1.apply(Vector.unit_vector(self.initial_point))
-                rotation_vec_2 = Vector.unit_vector(np.cross(self.normal_vec, v_1))
-                rotation_vec_2 *= self._poly_fit_angular(alpha)
-                r_2 = Rotation.from_rotvec(rotation_vec_2)
-                v_2 = r_2.apply(v_1)
-                v_2 *= self._radial_parameters[index, 1]
-                cartesian_points[index] = v_2
-            self._poly_fit_cartesian = []
-            for index in range(3):
-                self._poly_fit_cartesian.append(
-                    UnivariateSpline(
-                        self._radial_parameters[:, 0],
-                        cartesian_points[:, index],
-                        k=degree,
-                        s=0
-                    )
-                )
+            raise NotImplementedError("GreatCircleDeviation only provides derivatives up to second order")
+        point = point + np.outer(lateral(fraction, nu), self.normal_vec)
+
+        if scalar_input:
+            return point[0]
+        else:
+            return point
+
+    def parameter_jacobian(self, fraction: ArrayLike):
+        """
+        Exact derivatives of the position and of the path derivative with respect to every adjustable parameter.
+        See BasePath.parameter_jacobian
+        """
+        fraction = np.atleast_1d(np.asarray(fraction, dtype=float))
+        if self._basis_cache is None or not np.array_equal(self._basis_cache[0], fraction):
+            # Splines are linear in their knot values, so interpolating the identity matrix
+            # gives the response of the spline to a unit change of each knot
+            radial_basis = self._spline(self._radial_parameters, np.eye(len(self._radial_parameters)))
+            lateral_basis = self._spline(self._angular_parameters, np.eye(len(self._angular_parameters)))
+            self._basis_cache = (
+                fraction.copy(),
+                radial_basis(fraction)[:, 1:-1], radial_basis(fraction, 1)[:, 1:-1],
+                lateral_basis(fraction)[:, 1:-1], lateral_basis(fraction, 1)[:, 1:-1]
+            )
+        _, b_radial, db_radial, b_lateral, db_lateral = self._basis_cache
+        u, du, _ = self._great_circle_frame(fraction)
+
+        d_position = np.concatenate((
+            u[:, :, np.newaxis] * b_radial[:, np.newaxis, :],
+            self.normal_vec[np.newaxis, :, np.newaxis] * b_lateral[:, np.newaxis, :]
+        ), axis=2)
+        d_derivative = np.concatenate((
+            u[:, :, np.newaxis] * db_radial[:, np.newaxis, :] + du[:, :, np.newaxis] * b_radial[:, np.newaxis, :],
+            self.normal_vec[np.newaxis, :, np.newaxis] * db_lateral[:, np.newaxis, :]
+        ), axis=2)
+        return d_position, d_derivative

@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 import numpy as np
 from matplotlib import pyplot as plt
 from numpy.typing import ArrayLike
-from scipy.spatial.transform.rotation import Rotation
+from scipy.spatial.transform import Rotation
 
 from utilities import Vector
 from utilities import Constants

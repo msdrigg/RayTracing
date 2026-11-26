@@ -62,12 +62,49 @@ class BasePath(ABC):
         else:
             return fig, ax
 
+    # Set to True in subclasses whose position is a linear function of adjustable_parameters.
+    # The tracer's Hessian is exact for such paths and a (still convergent) Gauss-Newton
+    # approximation otherwise.
+    is_linear_in_parameters = False
+
+    @property
+    def quadrature_breakpoints(self) -> np.ndarray:
+        """
+        Path fractions (increasing, from 0 to 1) between which the path is smooth.
+        The tracer integrates panel by panel between these points.
+        """
+        return np.linspace(0, 1, 101)
+
+    def parameter_jacobian(self, fraction: ArrayLike, step: float = 1.0):
+        """
+        Derivatives of the path with respect to the adjustable parameters.
+
+        :param fraction : array_like, shape (N,)
+            the positions along the path. Each position is between 0 (start) and 1 (end)
+        :param step : float
+            the parameter change used for the finite difference
+        :returns : tuple of two arrays of shape (N, 3, number of parameters)
+            the derivative of the position self(fraction) and of the path derivative
+            self(fraction, nu=1) with respect to each adjustable parameter.
+
+        This default implementation uses central differences. Override it if
+        you can provide the derivatives analytically.
+        """
+        fraction = np.atleast_1d(np.asarray(fraction, dtype=float))
+        parameter_number = len(self.adjustable_parameters)
+        d_position = np.empty((len(fraction), 3, parameter_number))
+        d_derivative = np.empty((len(fraction), 3, parameter_number))
+        for index in range(parameter_number):
+            plus, minus = self.adjust_parameters(index, step), self.adjust_parameters(index, -step)
+            d_position[:, :, index] = (plus(fraction) - minus(fraction)) / (2 * step)
+            d_derivative[:, :, index] = (plus(fraction, nu=1) - minus(fraction, nu=1)) / (2 * step)
+        return d_position, d_derivative
+
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def transform_adjustments(self, indexes: ArrayLike, adjustments: ArrayLike) -> ArrayLike:
         """
-        adjust the change vector (optional). This is used in the GCD path to
-        reduce the magnitude of changes to the angular parameter. This is because we want to
-        adjust on the order of radians, not meters.
+        adjust the change vector (optional). Paths whose parameters are not all in
+        the same units can use this to rescale the changes.
 
         parameters are identical to those on the adjust_parameters function
 

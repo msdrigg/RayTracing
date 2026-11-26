@@ -27,7 +27,7 @@ def geographic_to_spherical(geographic: np.ndarray) -> np.ndarray:
         warnings.warn(RuntimeWarning("Getting at least one geographic vectors with altitudes less than -EARTH_RADIUS"))
     spherical = np.empty_like(geographic, dtype=float)
     spherical[..., 0] = geographic[..., 2] + EARTH_RADIUS
-    spherical[..., 1] = (90 + geographic[..., 0]) * math.pi / 180
+    spherical[..., 1] = (90 - geographic[..., 0]) * math.pi / 180
     spherical[..., 2] = geographic[..., 1] * math.pi / 180
 
     return spherical.reshape(geographic.shape)
@@ -44,7 +44,7 @@ def spherical_to_geographic(spherical: np.ndarray) -> np.ndarray:
     if np.any(spherical[..., 0] < 0):
         warnings.warn(RuntimeWarning("Getting at least one spherical vectors with radius's less than 0"))
     geographic = np.empty_like(spherical, dtype=float)
-    geographic[..., 0] = 180 / math.pi * spherical[..., 1] - 90
+    geographic[..., 0] = 90 - 180 / math.pi * spherical[..., 1]
     geographic[..., 1] = spherical[..., 2] * 180 / math.pi
     geographic[..., 2] = spherical[..., 0] - EARTH_RADIUS
 

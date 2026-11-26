@@ -51,11 +51,12 @@ def angle_between(s1, s2):
 
 
 def unit_radius(position):
+    """Unit vector in the radial direction at each (cartesian) position"""
     position = cartesian_to_spherical(position).reshape(-1, 3)
-    sin_phi = sin(position[:, 2])
-    unit_radii = vstack([cos(position[:, 1])*sin_phi,
-                         sin(position[:, 1])*sin_phi,
-                         cos(position[:, 2])]).T
+    theta, phi = position[:, 1], position[:, 2]
+    unit_radii = vstack([sin(theta)*cos(phi),
+                         sin(theta)*sin(phi),
+                         cos(theta)]).T
     if len(unit_radii) == 1:
         return unit_radii[0]
     else:
@@ -63,11 +64,12 @@ def unit_radius(position):
 
 
 def unit_theta(position):
+    """Unit vector in the direction of increasing polar angle (south) at each (cartesian) position"""
     position = cartesian_to_spherical(position).reshape(-1, 3)
-    cos_phi = cos(position[:, 2])
-    unit_thetas_return = vstack([cos(position[:, 1])*cos_phi,
-                                sin(position[:, 1])*cos_phi,
-                                -sin(position[:, 2])]).T
+    theta, phi = position[:, 1], position[:, 2]
+    unit_thetas_return = vstack([cos(theta)*cos(phi),
+                                cos(theta)*sin(phi),
+                                -sin(theta)]).T
     if len(unit_thetas_return) == 1:
         return unit_thetas_return[0]
     else:
@@ -75,7 +77,13 @@ def unit_theta(position):
 
 
 def latitude_to_spherical(vector):
-    vector = vector.reshape(-1, 3)
+    """
+    Converts (radius, latitude in degrees, longitude in degrees) to
+    (radius, polar angle in radians, azimuthal angle in radians).
+    Latitude is positive north, so the polar angle is 90 - latitude.
+    The input is not modified.
+    """
+    vector = np.array(vector, dtype=float).reshape(-1, 3)
     vector[:, 1] = 90 - vector[:, 1]
     vector[:, 1:] *= PI / 180.0
 
